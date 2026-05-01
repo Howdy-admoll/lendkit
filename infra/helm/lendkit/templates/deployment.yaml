@@ -1,0 +1,63 @@
+{{/* KYC Service Deployment */}}
+{{- if .Values.kyc.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-kyc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-kyc
+    app.kubernetes.io/name: kyc
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.kyc.image.tag | quote }}
+    app.kubernetes.io/part-of: lendkit
+spec:
+  replicas: {{ .Values.kyc.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-kyc
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-kyc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.kyc.port | quote }}
+        prometheus.io/path: "/metrics"
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: kyc
+          image: {{ .Values.global.image.registry }}/{{ .Values.global.image.organization }}/{{ .Values.kyc.image.name }}:{{ .Values.kyc.image.tag }}
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.kyc.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-kyc-config
+            - secretRef:
+                name: {{ .Release.Name }}-kyc-secrets
+          resources:
+            {{- toYaml .Values.kyc.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.kyc.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.kyc.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+{{- end }}

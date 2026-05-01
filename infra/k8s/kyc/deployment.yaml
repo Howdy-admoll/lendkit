@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyc
+  namespace: lendkit
+  labels:
+    app: kyc
+    app.kubernetes.io/name: kyc
+    app.kubernetes.io/part-of: lendkit
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kyc
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0       # zero-downtime deploys
+  template:
+    metadata:
+      labels:
+        app: kyc
+        app.kubernetes.io/name: kyc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: lendkit-kyc
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: kyc
+          image: ghcr.io/your-org/lendkit-kyc:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8001
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: kyc-config
+            - secretRef:
+                name: kyc-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            failureThreshold: 30
+            periodSeconds: 5
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: kyc
+---
+# KYC Celery Worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kyc-worker
+  namespace: lendkit
+  labels:
+    app: kyc-worker
+    app.kubernetes.io/name: kyc-worker
+    app.kubernetes.io/part-of: lendkit
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kyc-worker
+  template:
+    metadata:
+      labels:
+        app: kyc-worker
+    spec:
+      serviceAccountName: lendkit-kyc
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: kyc-worker
+          image: ghcr.io/your-org/lendkit-kyc:latest
+          command:
+            - celery
+            - -A
+            - app.workers.kyc_tasks
+            - worker
+            - --loglevel=info
+            - --concurrency=4
+            - -Q
+            - kyc
+          envFrom:
+            - configMapRef:
+                name: kyc-config
+            - secretRef:
+                name: kyc-secrets
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - app.workers.kyc_tasks
+                - inspect
+                - ping
+            initialDelaySeconds: 60
+            periodSeconds: 30

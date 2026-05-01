@@ -1,0 +1,27 @@
+apiVersion: v2
+name: lendkit
+description: LendKit — Open-Source Lending Platform Infrastructure
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/your-org/lendkit
+sources:
+  - https://github.com/your-org/lendkit
+maintainers:
+  - name: LendKit Contributors
+    url: https://github.com/your-org/lendkit
+keywords:
+  - lending
+  - fintech
+  - kyc
+  - credit-scoring
+  - microservices
+dependencies:
+  - name: postgresql
+    version: "15.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

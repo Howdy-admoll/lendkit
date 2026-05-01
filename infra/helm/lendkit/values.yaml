@@ -1,0 +1,165 @@
+# =============================================================================
+# LendKit Helm Chart — Default Values
+# Override in your own values file:
+#   helm install lendkit ./infra/helm/lendkit -f my-values.yaml
+# =============================================================================
+
+global:
+  image:
+    registry: ghcr.io
+    organization: your-org
+    pullPolicy: Always
+  env: production
+  logLevel: INFO
+
+# ---------------------------------------------------------------------------
+# KYC Service
+# ---------------------------------------------------------------------------
+kyc:
+  enabled: true
+  image:
+    name: lendkit-kyc
+    tag: "0.1.0"
+  replicaCount: 2
+  port: 8001
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  env:
+    IDENTITY_PROVIDER: "smile_id"
+    DOCUMENT_PROVIDER: "aws_textract"
+    BIN_CACHE_TTL: "86400"
+  secrets: {}
+    # SECRET_KEY: ""
+    # IDENTITY_API_KEY: ""
+  worker:
+    enabled: true
+    replicaCount: 2
+    concurrency: 4
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+
+# ---------------------------------------------------------------------------
+# Credit Scoring Service
+# ---------------------------------------------------------------------------
+creditScoring:
+  enabled: true
+  image:
+    name: lendkit-credit-scoring
+    tag: "0.1.0"
+  replicaCount: 2
+  port: 8002
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+
+# ---------------------------------------------------------------------------
+# Loan Origination Service
+# ---------------------------------------------------------------------------
+loanOrigination:
+  enabled: true
+  image:
+    name: lendkit-loan-origination
+    tag: "0.1.0"
+  replicaCount: 2
+  port: 8003
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# Repayment Service
+# ---------------------------------------------------------------------------
+repayment:
+  enabled: true
+  image:
+    name: lendkit-repayment
+    tag: "0.1.0"
+  replicaCount: 2
+  port: 8004
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# Ingress
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  host: lendkit.yourdomain.com
+  tls:
+    enabled: true
+    secretName: lendkit-tls
+
+# ---------------------------------------------------------------------------
+# PostgreSQL (Bitnami chart)
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  auth:
+    username: lendkit
+    password: ""   # set via --set or secret
+    database: kyc
+  primary:
+    persistence:
+      size: 20Gi
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# Redis (Bitnami chart)
+# ---------------------------------------------------------------------------
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 5Gi
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+
+# ---------------------------------------------------------------------------
+# Monitoring
+# ---------------------------------------------------------------------------
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s

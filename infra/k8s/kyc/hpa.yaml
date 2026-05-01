@@ -1,0 +1,58 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kyc
+  namespace: lendkit
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kyc
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # 5 min cooldown before scale-down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+---
+# Worker HPA — scales based on Celery queue depth
+# Requires keda (https://keda.sh) for queue-based scaling
+# Uncomment and install KEDA for production queue-aware autoscaling:
+# apiVersion: keda.sh/v1alpha1
+# kind: ScaledObject
+# metadata:
+#   name: kyc-worker
+#   namespace: lendkit
+# spec:
+#   scaleTargetRef:
+#     name: kyc-worker
+#   minReplicaCount: 1
+#   maxReplicaCount: 10
+#   triggers:
+#     - type: redis
+#       metadata:
+#         address: redis-master.lendkit:6379
+#         listName: kyc
+#         listLength: "5"

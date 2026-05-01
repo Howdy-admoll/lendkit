@@ -1,0 +1,196 @@
+version: "3.9"
+
+# =============================================================================
+# LendKit — Local Development Stack
+# =============================================================================
+# Usage:
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Services:
+#   - postgres      : Shared PostgreSQL instance (4 databases)
+#   - redis         : Cache + Celery broker + event streams
+#   - kyc           : KYC/BIN verification service  :8001
+#   - credit        : Credit scoring engine          :8002
+#   - loan          : Loan origination pipeline      :8003
+#   - repayment     : Repayment & default tracker    :8004
+#   - worker-kyc    : Celery worker for KYC tasks
+#   - flower        : Celery monitoring UI           :5555
+# =============================================================================
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  env_file: .env
+  networks:
+    - lendkit
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 20s
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+  postgres:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lendkit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lendkit}
+      POSTGRES_DB: kyc
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lendkit}"]
+
+  redis:
+    <<: *service-defaults
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+
+  # ---------------------------------------------------------------------------
+  # KYC / BIN Verification Service
+  # ---------------------------------------------------------------------------
+  kyc:
+    <<: *service-defaults
+    build:
+      context: ./services/kyc
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/kyc:/app
+      - ./shared:/app/shared
+    ports:
+      - "${KYC_SERVICE_PORT:-8001}:8001"
+    environment:
+      SERVICE_PORT: 8001
+      DB_URL: ${KYC_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/kyc}
+      REDIS_URL: ${KYC_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+
+  worker-kyc:
+    <<: *service-defaults
+    build:
+      context: ./services/kyc
+      dockerfile: Dockerfile
+      target: development
+    command: celery -A app.workers.kyc_tasks worker --loglevel=info --concurrency=4 -Q kyc
+    volumes:
+      - ./services/kyc:/app
+      - ./shared:/app/shared
+    environment:
+      DB_URL: ${KYC_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/kyc}
+      REDIS_URL: ${KYC_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Credit Scoring Service
+  # ---------------------------------------------------------------------------
+  credit:
+    <<: *service-defaults
+    build:
+      context: ./services/credit-scoring
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/credit-scoring:/app
+      - ./shared:/app/shared
+    ports:
+      - "${CREDIT_SCORING_SERVICE_PORT:-8002}:8002"
+    environment:
+      SERVICE_PORT: 8002
+      DB_URL: ${CREDIT_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/credit}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Loan Origination Service
+  # ---------------------------------------------------------------------------
+  loan:
+    <<: *service-defaults
+    build:
+      context: ./services/loan-origination
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/loan-origination:/app
+      - ./shared:/app/shared
+    ports:
+      - "${LOAN_ORIGINATION_SERVICE_PORT:-8003}:8003"
+    environment:
+      SERVICE_PORT: 8003
+      DB_URL: ${LOAN_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/loans}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kyc:
+        condition: service_healthy
+      credit:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Repayment & Default Detection Service
+  # ---------------------------------------------------------------------------
+  repayment:
+    <<: *service-defaults
+    build:
+      context: ./services/repayment
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/repayment:/app
+      - ./shared:/app/shared
+    ports:
+      - "${REPAYMENT_SERVICE_PORT:-8004}:8004"
+    environment:
+      SERVICE_PORT: 8004
+      DB_URL: ${REPAYMENT_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/repayment}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Monitoring
+  # ---------------------------------------------------------------------------
+  flower:
+    <<: *service-defaults
+    image: mher/flower:2.0
+    command: celery flower --broker=redis://redis:6379/0 --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  lendkit:
+    driver: bridge

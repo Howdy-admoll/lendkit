@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lendkit
+  labels:
+    app.kubernetes.io/name: lendkit
+    app.kubernetes.io/managed-by: helm
+    environment: production
