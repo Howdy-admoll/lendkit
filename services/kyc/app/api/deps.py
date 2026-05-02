@@ -1,6 +1,7 @@
 """
 KYC Service — FastAPI Dependencies
 """
+
 from typing import Annotated
 
 import redis.asyncio as aioredis
@@ -40,6 +41,7 @@ RedisDep = Annotated[aioredis.Redis, Depends(get_redis)]
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
 
 async def get_current_tenant(
     authorization: Annotated[str | None, Header()] = None,

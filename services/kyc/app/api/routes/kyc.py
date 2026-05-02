@@ -7,6 +7,7 @@ PATCH  /api/v1/kyc/{id}        Update personal info
 POST   /api/v1/kyc/{id}/documents  Upload a document
 POST   /api/v1/kyc/webhooks/{provider}  Inbound provider webhook
 """
+
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -44,6 +45,7 @@ _MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 # POST /kyc/ — Initiate KYC
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/",
     response_model=KYCInitiateResponse,
@@ -67,7 +69,7 @@ async def initiate_kyc(
     existing = await db.execute(
         select(KYCVerification).where(
             KYCVerification.customer_id == payload.customer_id,
-            KYCVerification.tenant_id  == payload.tenant_id,
+            KYCVerification.tenant_id == payload.tenant_id,
             KYCVerification.status.notin_([KYCStatus.REJECTED, KYCStatus.EXPIRED]),
         )
     )
@@ -78,21 +80,21 @@ async def initiate_kyc(
         )
 
     verification = KYCVerification(
-        customer_id    = payload.customer_id,
-        tenant_id      = payload.tenant_id,
-        status         = KYCStatus.INITIATED,
-        level          = VerificationLevel(payload.level),
-        first_name     = payload.first_name,
-        last_name      = payload.last_name,
-        date_of_birth  = payload.date_of_birth,
-        phone_number   = payload.phone_number,
-        email          = str(payload.email) if payload.email else None,
-        address_line1  = payload.address_line1,
-        address_line2  = payload.address_line2,
-        city           = payload.city,
-        state          = payload.state,
-        country        = payload.country,
-        postal_code    = payload.postal_code,
+        customer_id=payload.customer_id,
+        tenant_id=payload.tenant_id,
+        status=KYCStatus.INITIATED,
+        level=VerificationLevel(payload.level),
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        date_of_birth=payload.date_of_birth,
+        phone_number=payload.phone_number,
+        email=str(payload.email) if payload.email else None,
+        address_line1=payload.address_line1,
+        address_line2=payload.address_line2,
+        city=payload.city,
+        state=payload.state,
+        country=payload.country,
+        postal_code=payload.postal_code,
     )
     db.add(verification)
     await db.flush()  # get the ID
@@ -119,6 +121,7 @@ async def initiate_kyc(
 # GET /kyc/{verification_id} — Status
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/{verification_id}",
     response_model=KYCStatusResponse,
@@ -141,36 +144,37 @@ async def get_kyc_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification not found")
 
     return KYCStatusResponse(
-        id               = verification.id,
-        customer_id      = verification.customer_id,
-        tenant_id        = verification.tenant_id,
-        status           = verification.status.value,
-        level            = verification.level.value,
-        risk_score       = verification.risk_score,
-        is_pep           = verification.is_pep,
-        is_sanctioned    = verification.is_sanctioned,
-        rejection_reason = verification.rejection_reason,
-        documents        = [
+        id=verification.id,
+        customer_id=verification.customer_id,
+        tenant_id=verification.tenant_id,
+        status=verification.status.value,
+        level=verification.level.value,
+        risk_score=verification.risk_score,
+        is_pep=verification.is_pep,
+        is_sanctioned=verification.is_sanctioned,
+        rejection_reason=verification.rejection_reason,
+        documents=[
             DocumentVerificationResult(
-                document_id      = doc.id,
-                status           = doc.status.value,
-                document_type    = doc.document_type.value,
-                confidence_score = float(doc.confidence_score) if doc.confidence_score else None,
-                extracted_data   = doc.extracted_data,
-                rejection_reason = doc.rejection_reason,
+                document_id=doc.id,
+                status=doc.status.value,
+                document_type=doc.document_type.value,
+                confidence_score=float(doc.confidence_score) if doc.confidence_score else None,
+                extracted_data=doc.extracted_data,
+                rejection_reason=doc.rejection_reason,
             )
             for doc in (verification.documents or [])
         ],
-        created_at  = verification.created_at,
-        updated_at  = verification.updated_at,
-        approved_at = verification.approved_at,
-        expires_at  = verification.expires_at,
+        created_at=verification.created_at,
+        updated_at=verification.updated_at,
+        approved_at=verification.approved_at,
+        expires_at=verification.expires_at,
     )
 
 
 # ---------------------------------------------------------------------------
 # PATCH /kyc/{verification_id} — Update personal info
 # ---------------------------------------------------------------------------
+
 
 @router.patch(
     "/{verification_id}",
@@ -218,6 +222,7 @@ async def update_kyc(
 # POST /kyc/{verification_id}/documents — Upload document
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/{verification_id}/documents",
     status_code=status.HTTP_202_ACCEPTED,
@@ -254,7 +259,9 @@ async def upload_document(
     try:
         doc_type = DocumentType(document_type)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid document_type: {document_type}") from exc
+        raise HTTPException(
+            status_code=422, detail=f"Invalid document_type: {document_type}"
+        ) from exc
 
     # Validate file size
     front_bytes = await front_image.read()
@@ -282,12 +289,12 @@ async def upload_document(
 
     # Create DB record
     doc = KYCDocument(
-        verification_id = verification_id,
-        document_type   = doc_type,
-        document_number = document_number,
-        status          = DocumentStatus.SUBMITTED,
-        front_image_key = front_key,
-        back_image_key  = back_key,
+        verification_id=verification_id,
+        document_type=doc_type,
+        document_number=document_number,
+        status=DocumentStatus.SUBMITTED,
+        front_image_key=front_key,
+        back_image_key=back_key,
     )
     db.add(doc)
     await db.flush()
@@ -307,6 +314,7 @@ async def upload_document(
 # ---------------------------------------------------------------------------
 # POST /kyc/webhooks/{provider} — Provider webhook
 # ---------------------------------------------------------------------------
+
 
 @router.post(
     "/webhooks/{provider}",
@@ -340,16 +348,16 @@ async def handle_webhook(
         log.warning("No verification found for provider ref: %s", result.provider_reference)
         return {"status": "not_found"}
 
-    verification.status           = result.status
-    verification.risk_score       = result.risk_score
-    verification.is_pep           = result.is_pep
-    verification.is_sanctioned    = result.is_sanctioned
+    verification.status = result.status
+    verification.risk_score = result.risk_score
+    verification.is_pep = result.is_pep
+    verification.is_sanctioned = result.is_sanctioned
     verification.provider_response = result.raw_response
-    verification.rejection_reason  = result.rejection_reason
+    verification.rejection_reason = result.rejection_reason
 
     if result.status == KYCStatus.APPROVED:
         verification.approved_at = datetime.now(datetime.UTC)
-        verification.expires_at  = datetime.now(datetime.UTC) + timedelta(days=365)
+        verification.expires_at = datetime.now(datetime.UTC) + timedelta(days=365)
 
     await db.commit()
     return {"status": "processed"}

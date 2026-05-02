@@ -1,6 +1,7 @@
 """
 KYC Service — Async SQLAlchemy session factory
 """
+
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -24,7 +25,7 @@ def get_engine() -> AsyncEngine:
             pool_size=settings.db_pool_size,
             max_overflow=settings.db_max_overflow,
             pool_timeout=settings.db_pool_timeout,
-            pool_pre_ping=True,      # recycle stale connections
+            pool_pre_ping=True,  # recycle stale connections
             echo=settings.is_development,
         )
     return _engine

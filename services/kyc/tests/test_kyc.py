@@ -1,6 +1,7 @@
 """
 KYC Service — Identity Verification Tests
 """
+
 import uuid
 
 import pytest
@@ -12,24 +13,26 @@ from app.services.identity import MockIdentityProvider
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def make_verification(customer_id: str = "cust_001", level: str = "basic") -> KYCVerification:
     v = KYCVerification()
-    v.id          = uuid.uuid4()
+    v.id = uuid.uuid4()
     v.customer_id = customer_id
-    v.tenant_id   = "tenant_test"
-    v.status      = KYCStatus.INITIATED
-    v.level       = VerificationLevel(level)
-    v.first_name  = "John"
-    v.last_name   = "Doe"
+    v.tenant_id = "tenant_test"
+    v.status = KYCStatus.INITIATED
+    v.level = VerificationLevel(level)
+    v.first_name = "John"
+    v.last_name = "Doe"
     v.date_of_birth = "1990-01-15"
-    v.phone_number  = "+2348012345678"
-    v.country       = "NGA"
+    v.phone_number = "+2348012345678"
+    v.country = "NGA"
     return v
 
 
 # ---------------------------------------------------------------------------
 # Mock Provider Tests
 # ---------------------------------------------------------------------------
+
 
 class TestMockIdentityProvider:
     @pytest.fixture
@@ -76,9 +79,11 @@ class TestMockIdentityProvider:
 # KYC Schema Tests
 # ---------------------------------------------------------------------------
 
+
 class TestKYCSchemas:
     def test_kyc_initiate_request_valid(self):
         from app.schemas.kyc import KYCInitiateRequest
+
         req = KYCInitiateRequest(
             customer_id="cust_123",
             tenant_id="tenant_abc",

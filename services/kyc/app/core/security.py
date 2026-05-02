@@ -2,6 +2,7 @@
 KYC Service — Security utilities
 JWT decoding, API key validation, HMAC signature verification.
 """
+
 import hashlib
 import hmac
 import time
@@ -20,15 +21,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT
 # ---------------------------------------------------------------------------
 
+
 def create_access_token(
     subject: str | int,
     extra_claims: dict[str, Any] | None = None,
     expires_delta: timedelta | None = None,
 ) -> str:
     """Issue a signed JWT access token."""
-    expire = datetime.now(UTC) + (
-        expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
-    )
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
     payload: dict[str, Any] = {
         "sub": str(subject),
         "iat": datetime.now(UTC),
@@ -63,6 +63,7 @@ def verify_token(token: str) -> str | None:
 # Passwords
 # ---------------------------------------------------------------------------
 
+
 def hash_password(plain: str) -> str:
     return pwd_context.hash(plain)
 
@@ -75,6 +76,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 # Webhook / provider signature verification
 # ---------------------------------------------------------------------------
 
+
 def verify_hmac_signature(
     payload: bytes,
     signature: str,
@@ -86,15 +88,14 @@ def verify_hmac_signature(
     Supports hex-encoded or 'sha256=...' prefixed signatures.
     """
     signature = signature.removeprefix(f"{algorithm}=")
-    expected = hmac.new(
-        secret.encode(), payload, getattr(hashlib, algorithm)
-    ).hexdigest()
+    expected = hmac.new(secret.encode(), payload, getattr(hashlib, algorithm)).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 
 # ---------------------------------------------------------------------------
 # API Key helpers
 # ---------------------------------------------------------------------------
+
 
 def mask_api_key(key: str, visible: int = 6) -> str:
     """Return partially masked key safe for logging: sk_test_abc•••••"""
@@ -109,6 +110,7 @@ def generate_api_key(prefix: str = "lk") -> tuple[str, str]:
     Returns (raw_key, hashed_key) — store only the hash.
     """
     import secrets
+
     raw = f"{prefix}_{secrets.token_urlsafe(32)}"
     return raw, hash_password(raw)
 
@@ -116,6 +118,7 @@ def generate_api_key(prefix: str = "lk") -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 # Rate limiting token bucket (simple in-memory, for testing)
 # ---------------------------------------------------------------------------
+
 
 class TokenBucket:
     """Simple token bucket for per-IP rate limiting (use Redis in prod)."""
@@ -129,9 +132,7 @@ class TokenBucket:
     def consume(self, tokens: int = 1) -> bool:
         now = time.monotonic()
         elapsed = now - self._last_refill
-        self._tokens = min(
-            self.capacity, self._tokens + elapsed * self.refill_rate
-        )
+        self._tokens = min(self.capacity, self._tokens + elapsed * self.refill_rate)
         self._last_refill = now
 
         if self._tokens >= tokens:

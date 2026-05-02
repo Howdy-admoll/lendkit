@@ -1,6 +1,7 @@
 """
 KYC Service — BIN Lookup Tests
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ from app.services.bin_lookup import BINLookupService
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_db():
@@ -52,6 +54,7 @@ def sample_bin_response():
 # ---------------------------------------------------------------------------
 # BIN Lookup Tests
 # ---------------------------------------------------------------------------
+
 
 class TestBINLookup:
     async def test_lookup_from_redis_cache(self, bin_service, mock_redis, sample_bin_response):
@@ -160,7 +163,11 @@ class TestBINParsing:
             "type": "credit",
             "brand": "MASTERCARD",
             "prepaid": False,
-            "bank": {"name": "First Bank", "url": "https://firstbank.com", "phone": "0800-033-3400"},
+            "bank": {
+                "name": "First Bank",
+                "url": "https://firstbank.com",
+                "phone": "0800-033-3400",
+            },
             "country": {"name": "Nigeria", "alpha2": "NG", "currency": "NGN"},
             "category": "WORLD",
         }

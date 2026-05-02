@@ -9,6 +9,7 @@ Lookup flow:
 Supports binlist.net-compatible APIs.
 Pluggable: swap provider in config without touching routes.
 """
+
 import json
 import logging
 from datetime import datetime, timedelta
@@ -141,9 +142,7 @@ class BINLookupService:
     # -------------------------------------------------------------------------
 
     async def _from_db(self, bin_number: str) -> BINRecord | None:
-        result = await self.db.execute(
-            select(BINRecord).where(BINRecord.bin == bin_number)
-        )
+        result = await self.db.execute(select(BINRecord).where(BINRecord.bin == bin_number))
         return result.scalar_one_or_none()
 
     async def _upsert_db(
@@ -153,19 +152,19 @@ class BINLookupService:
         expires = datetime.now(datetime.UTC) + timedelta(seconds=settings.bin_cache_ttl)
 
         if existing:
-            existing.card_brand    = resp.card_brand
-            existing.card_type     = resp.card_type
+            existing.card_brand = resp.card_brand
+            existing.card_type = resp.card_type
             existing.card_category = resp.card_category
-            existing.bank_name     = resp.bank.name
-            existing.bank_url      = resp.bank.url
-            existing.bank_phone    = resp.bank.phone
-            existing.country_name  = resp.country_name
-            existing.country_code  = resp.country_code
-            existing.currency      = resp.currency
-            existing.is_prepaid    = resp.is_prepaid
-            existing.raw_response  = raw
-            existing.fetched_at    = datetime.now(datetime.UTC)
-            existing.expires_at    = expires
+            existing.bank_name = resp.bank.name
+            existing.bank_url = resp.bank.url
+            existing.bank_phone = resp.bank.phone
+            existing.country_name = resp.country_name
+            existing.country_code = resp.country_code
+            existing.currency = resp.currency
+            existing.is_prepaid = resp.is_prepaid
+            existing.raw_response = raw
+            existing.fetched_at = datetime.now(datetime.UTC)
+            existing.expires_at = expires
         else:
             record = BINRecord(
                 bin=bin_number,

@@ -8,6 +8,7 @@ Pluggable provider pattern:
 
 Add new providers by subclassing IdentityProvider and registering in get_provider().
 """
+
 import logging
 import uuid
 from abc import ABC, abstractmethod
@@ -26,10 +27,16 @@ log = logging.getLogger(__name__)
 # Data Transfer Objects
 # ---------------------------------------------------------------------------
 
+
 class IdentityCheckResult:
     __slots__ = (
-        "provider_reference", "status", "risk_score",
-        "is_pep", "is_sanctioned", "raw_response", "rejection_reason"
+        "provider_reference",
+        "status",
+        "risk_score",
+        "is_pep",
+        "is_sanctioned",
+        "raw_response",
+        "rejection_reason",
     )
 
     def __init__(
@@ -43,17 +50,18 @@ class IdentityCheckResult:
         rejection_reason: str | None = None,
     ) -> None:
         self.provider_reference = provider_reference
-        self.status             = status
-        self.risk_score         = risk_score
-        self.is_pep             = is_pep
-        self.is_sanctioned      = is_sanctioned
-        self.raw_response       = raw_response or {}
-        self.rejection_reason   = rejection_reason
+        self.status = status
+        self.risk_score = risk_score
+        self.is_pep = is_pep
+        self.is_sanctioned = is_sanctioned
+        self.raw_response = raw_response or {}
+        self.rejection_reason = rejection_reason
 
 
 # ---------------------------------------------------------------------------
 # Abstract Provider
 # ---------------------------------------------------------------------------
+
 
 class IdentityProvider(ABC):
     """All identity verification providers implement this interface."""
@@ -74,6 +82,7 @@ class IdentityProvider(ABC):
 # ---------------------------------------------------------------------------
 # Mock Provider (dev / CI)
 # ---------------------------------------------------------------------------
+
 
 class MockIdentityProvider(IdentityProvider):
     """
@@ -125,6 +134,7 @@ class MockIdentityProvider(IdentityProvider):
 # Smile Identity Provider
 # ---------------------------------------------------------------------------
 
+
 class SmileIDProvider(IdentityProvider):
     """
     Smile Identity v2 API integration.
@@ -134,7 +144,7 @@ class SmileIDProvider(IdentityProvider):
     BASE_URL = "https://api.smileidentity.com/v1"
 
     def __init__(self) -> None:
-        self.api_key  = settings.identity_api_key
+        self.api_key = settings.identity_api_key
         self.base_url = settings.identity_api_url or self.BASE_URL
 
     async def initiate(self, verification: KYCVerification) -> IdentityCheckResult:
@@ -146,7 +156,7 @@ class SmileIDProvider(IdentityProvider):
             "callback_url": f"{settings.identity_api_url}/kyc/webhooks/smile",
             "country": verification.country,
             "id_type": "BVN",
-            "id_number": "",   # populated after document upload
+            "id_number": "",  # populated after document upload
             "first_name": verification.first_name,
             "last_name": verification.last_name,
             "dob": verification.date_of_birth,
@@ -227,6 +237,7 @@ class SmileIDProvider(IdentityProvider):
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
+
 
 def get_identity_provider() -> IdentityProvider:
     """Return the configured identity provider singleton."""

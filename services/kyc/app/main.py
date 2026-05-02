@@ -3,6 +3,7 @@ LendKit — KYC / BIN Verification Service
 
 Entry point for the FastAPI application.
 """
+
 import logging
 import time
 from collections.abc import AsyncGenerator
@@ -30,7 +31,8 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
-        structlog.processors.JSONRenderer() if not settings.is_development
+        structlog.processors.JSONRenderer()
+        if not settings.is_development
         else structlog.dev.ConsoleRenderer(),
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
@@ -62,6 +64,7 @@ REQUEST_DURATION = Histogram(
 # ---------------------------------------------------------------------------
 # App lifecycle
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -160,6 +163,7 @@ app.include_router(bin_router.router, prefix="/api/v1")
 # ---------------------------------------------------------------------------
 # Core endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health", tags=["System"], summary="Health check")
 async def health() -> dict:

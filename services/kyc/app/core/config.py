@@ -2,6 +2,7 @@
 KYC Service — Application Configuration
 Loaded from environment variables with pydantic-settings.
 """
+
 from functools import lru_cache
 from typing import Literal
 
@@ -28,9 +29,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Database
     # -------------------------------------------------------------------------
-    db_url: PostgresDsn = Field(
-        default="postgresql+asyncpg://lendkit:lendkit@postgres:5432/kyc"
-    )
+    db_url: PostgresDsn = Field(default="postgresql+asyncpg://lendkit:lendkit@postgres:5432/kyc")
     db_pool_size: int = 10
     db_max_overflow: int = 20
     db_pool_timeout: int = 30

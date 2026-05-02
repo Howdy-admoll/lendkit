@@ -4,6 +4,7 @@ KYC Service — BIN Lookup Routes
 GET  /api/v1/bin/{bin}         Lookup BIN metadata
 POST /api/v1/bin/validate      Validate BIN against lender rules
 """
+
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, status

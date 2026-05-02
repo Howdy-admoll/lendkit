@@ -7,6 +7,7 @@ Async tasks that run outside the request cycle:
   - expire_stale_kyc      : scheduled cleanup task
   - emit_kyc_event        : publish domain events to event bus
 """
+
 import logging
 import uuid
 from datetime import datetime, timedelta
@@ -36,8 +37,8 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_acks_late=True,          # only ack after task completes (at-least-once)
-    worker_prefetch_multiplier=1, # one task at a time per worker slot
+    task_acks_late=True,  # only ack after task completes (at-least-once)
+    worker_prefetch_multiplier=1,  # one task at a time per worker slot
     result_expires=settings.celery_result_expires,
     beat_schedule={
         # Expire KYC records older than 90 days with no activity
@@ -53,15 +54,16 @@ celery_app.conf.update(
 # Base task with DB session injection
 # ---------------------------------------------------------------------------
 
+
 class DBTask(Task):
     """Abstract base that provides a scoped async session per task."""
+
     abstract = True
 
     def __call__(self, *args, **kwargs):
         import asyncio
-        return asyncio.get_event_loop().run_until_complete(
-            self._async_call(*args, **kwargs)
-        )
+
+        return asyncio.get_event_loop().run_until_complete(self._async_call(*args, **kwargs))
 
     async def _async_call(self, *args, **kwargs):
         raise NotImplementedError
@@ -70,6 +72,7 @@ class DBTask(Task):
 # ---------------------------------------------------------------------------
 # Identity Verification Task
 # ---------------------------------------------------------------------------
+
 
 @celery_app.task(
     name="kyc.run_identity_check",
@@ -84,6 +87,7 @@ def run_identity_check(self: Task, verification_id: str) -> dict:
     Retries on transient provider failures.
     """
     import asyncio
+
     return asyncio.get_event_loop().run_until_complete(
         _async_run_identity_check(self, verification_id)
     )
@@ -99,9 +103,7 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
     factory = get_session_factory()
     async with factory() as db:
         result = await db.execute(
-            select(KYCVerification).where(
-                KYCVerification.id == uuid.UUID(verification_id)
-            )
+            select(KYCVerification).where(KYCVerification.id == uuid.UUID(verification_id))
         )
         verification = result.scalar_one_or_none()
 
@@ -117,17 +119,17 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
             raise task.retry(exc=exc) from exc
 
         # Update the record
-        verification.status              = check_result.status
-        verification.provider_reference  = check_result.provider_reference
-        verification.provider_response   = check_result.raw_response
-        verification.risk_score          = check_result.risk_score
-        verification.is_pep              = check_result.is_pep
-        verification.is_sanctioned       = check_result.is_sanctioned
-        verification.rejection_reason    = check_result.rejection_reason
+        verification.status = check_result.status
+        verification.provider_reference = check_result.provider_reference
+        verification.provider_response = check_result.raw_response
+        verification.risk_score = check_result.risk_score
+        verification.is_pep = check_result.is_pep
+        verification.is_sanctioned = check_result.is_sanctioned
+        verification.rejection_reason = check_result.rejection_reason
 
         if check_result.status == KYCStatus.APPROVED:
             verification.approved_at = datetime.now(datetime.UTC)
-            verification.expires_at  = datetime.now(datetime.UTC) + timedelta(days=365)
+            verification.expires_at = datetime.now(datetime.UTC) + timedelta(days=365)
 
         await db.commit()
 
@@ -136,7 +138,9 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
 
     log.info(
         "Identity check complete: %s → %s (risk=%s)",
-        verification_id, check_result.status.value, check_result.risk_score,
+        verification_id,
+        check_result.status.value,
+        check_result.risk_score,
     )
     return {
         "verification_id": verification_id,
@@ -149,6 +153,7 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
 # Document Verification Task
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(
     name="kyc.run_document_verify",
     bind=True,
@@ -158,6 +163,7 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
 )
 def run_document_verify(self: Task, document_id: str) -> dict:
     import asyncio
+
     return asyncio.get_event_loop().run_until_complete(
         _async_run_document_verify(self, document_id)
     )
@@ -182,16 +188,14 @@ async def _async_run_document_verify(task: Task, document_id: str) -> dict:
 
         processor = get_document_processor()
         try:
-            extraction = await processor.extract(
-                doc.front_image_key or "", doc.document_type
-            )
+            extraction = await processor.extract(doc.front_image_key or "", doc.document_type)
         except Exception as exc:
             log.warning("Document extraction error: %s — retrying", exc)
             raise task.retry(exc=exc) from exc
 
-        doc.status           = extraction.status
+        doc.status = extraction.status
         doc.confidence_score = extraction.confidence_score
-        doc.extracted_data   = extraction.extracted_data
+        doc.extracted_data = extraction.extracted_data
         doc.rejection_reason = extraction.rejection_reason
 
         await db.commit()
@@ -208,9 +212,11 @@ async def _async_run_document_verify(task: Task, document_id: str) -> dict:
 # Expiry Task (beat)
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(name="kyc.expire_stale_kyc", queue="kyc")
 def expire_stale_kyc() -> dict:
     import asyncio
+
     return asyncio.get_event_loop().run_until_complete(_async_expire_stale_kyc())
 
 
@@ -243,6 +249,7 @@ async def _async_expire_stale_kyc() -> dict:
 # Event Emission Task
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(name="kyc.emit_kyc_event", queue="kyc")
 def emit_kyc_event(verification_id: str, event: str) -> None:
     """
@@ -250,9 +257,8 @@ def emit_kyc_event(verification_id: str, event: str) -> None:
     Other services (loan, credit) consume these events.
     """
     import asyncio
-    asyncio.get_event_loop().run_until_complete(
-        _async_emit_kyc_event(verification_id, event)
-    )
+
+    asyncio.get_event_loop().run_until_complete(_async_emit_kyc_event(verification_id, event))
 
 
 async def _async_emit_kyc_event(verification_id: str, event: str) -> None:
@@ -260,12 +266,14 @@ async def _async_emit_kyc_event(verification_id: str, event: str) -> None:
 
     import redis.asyncio as aioredis
 
-    payload = json.dumps({
-        "event": event,
-        "verification_id": verification_id,
-        "timestamp": datetime.now(datetime.UTC).isoformat(),
-        "source": "kyc-service",
-    })
+    payload = json.dumps(
+        {
+            "event": event,
+            "verification_id": verification_id,
+            "timestamp": datetime.now(datetime.UTC).isoformat(),
+            "source": "kyc-service",
+        }
+    )
 
     try:
         client = aioredis.from_url(str(settings.redis_stream_url))
