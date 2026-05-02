@@ -5,7 +5,7 @@ JWT decoding, API key validation, HMAC signature verification.
 import hashlib
 import hmac
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
@@ -26,12 +26,12 @@ def create_access_token(
     expires_delta: timedelta | None = None,
 ) -> str:
     """Issue a signed JWT access token."""
-    expire = datetime.now(timezone.utc) + (
+    expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
     )
     payload: dict[str, Any] = {
         "sub": str(subject),
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "exp": expire,
         "type": "access",
     }

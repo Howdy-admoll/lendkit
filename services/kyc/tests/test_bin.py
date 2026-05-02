@@ -1,13 +1,12 @@
 """
 KYC Service — BIN Lookup Tests
 """
-import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.schemas.bin import BankInfo, BINLookupResponse
 from app.services.bin_lookup import BINLookupService
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

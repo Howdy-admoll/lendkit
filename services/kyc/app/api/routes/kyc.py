@@ -7,24 +7,32 @@ PATCH  /api/v1/kyc/{id}        Update personal info
 POST   /api/v1/kyc/{id}/documents  Upload a document
 POST   /api/v1/kyc/webhooks/{provider}  Inbound provider webhook
 """
-import uuid
 import logging
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.api.deps import DBDep, RedisDep, TenantDep
+from app.api.deps import DBDep, TenantDep
 from app.db.models import (
-    DocumentStatus, DocumentType, KYCDocument, KYCStatus, KYCVerification, VerificationLevel
+    DocumentStatus,
+    DocumentType,
+    KYCDocument,
+    KYCStatus,
+    KYCVerification,
+    VerificationLevel,
 )
 from app.schemas.kyc import (
-    DocumentUploadRequest, DocumentVerificationResult,
-    KYCInitiateRequest, KYCInitiateResponse, KYCStatusResponse, KYCUpdateRequest,
+    DocumentVerificationResult,
+    KYCInitiateRequest,
+    KYCInitiateResponse,
+    KYCStatusResponse,
+    KYCUpdateRequest,
 )
 from app.services.document import get_document_processor
 from app.services.identity import get_identity_provider
-from app.workers.kyc_tasks import run_identity_check, run_document_verify
+from app.workers.kyc_tasks import run_document_verify, run_identity_check
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/kyc", tags=["KYC Verification"])
@@ -245,8 +253,8 @@ async def upload_document(
     # Validate document type
     try:
         doc_type = DocumentType(document_type)
-    except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid document_type: {document_type}")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid document_type: {document_type}") from exc
 
     # Validate file size
     front_bytes = await front_image.read()
@@ -340,9 +348,8 @@ async def handle_webhook(
     verification.rejection_reason  = result.rejection_reason
 
     if result.status == KYCStatus.APPROVED:
-        from datetime import timedelta
-        verification.approved_at = datetime.now(timezone.utc)
-        verification.expires_at  = datetime.now(timezone.utc) + timedelta(days=365)
+        verification.approved_at = datetime.now(datetime.UTC)
+        verification.expires_at  = datetime.now(datetime.UTC) + timedelta(days=365)
 
     await db.commit()
     return {"status": "processed"}

@@ -9,7 +9,7 @@ Async tasks that run outside the request cycle:
 """
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from celery import Celery, Task
 from celery.utils.log import get_task_logger
@@ -114,7 +114,7 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
             check_result = await provider.initiate(verification)
         except Exception as exc:
             log.warning("Identity provider error: %s — retrying", exc)
-            raise task.retry(exc=exc)
+            raise task.retry(exc=exc) from exc
 
         # Update the record
         verification.status              = check_result.status
@@ -126,8 +126,8 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
         verification.rejection_reason    = check_result.rejection_reason
 
         if check_result.status == KYCStatus.APPROVED:
-            verification.approved_at = datetime.now(timezone.utc)
-            verification.expires_at  = datetime.now(timezone.utc) + timedelta(days=365)
+            verification.approved_at = datetime.now(datetime.UTC)
+            verification.expires_at  = datetime.now(datetime.UTC) + timedelta(days=365)
 
         await db.commit()
 
@@ -164,7 +164,7 @@ def run_document_verify(self: Task, document_id: str) -> dict:
 
 
 async def _async_run_document_verify(task: Task, document_id: str) -> dict:
-    from app.db.models import DocumentStatus, DocumentType, KYCDocument
+    from app.db.models import KYCDocument
     from app.db.session import get_session_factory
     from app.services.document import get_document_processor
 
@@ -187,7 +187,7 @@ async def _async_run_document_verify(task: Task, document_id: str) -> dict:
             )
         except Exception as exc:
             log.warning("Document extraction error: %s — retrying", exc)
-            raise task.retry(exc=exc)
+            raise task.retry(exc=exc) from exc
 
         doc.status           = extraction.status
         doc.confidence_score = extraction.confidence_score
@@ -218,7 +218,7 @@ async def _async_expire_stale_kyc() -> dict:
     from app.db.models import KYCStatus, KYCVerification
     from app.db.session import get_session_factory
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    cutoff = datetime.now(datetime.UTC) - timedelta(days=90)
     factory = get_session_factory()
 
     async with factory() as db:
@@ -257,12 +257,13 @@ def emit_kyc_event(verification_id: str, event: str) -> None:
 
 async def _async_emit_kyc_event(verification_id: str, event: str) -> None:
     import json
+
     import redis.asyncio as aioredis
 
     payload = json.dumps({
         "event": event,
         "verification_id": verification_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(datetime.UTC).isoformat(),
         "source": "kyc-service",
     })
 

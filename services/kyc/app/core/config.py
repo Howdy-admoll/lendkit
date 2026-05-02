@@ -5,7 +5,7 @@ Loaded from environment variables with pydantic-settings.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, RedisDsn, PostgresDsn
+from pydantic import AnyHttpUrl, Field, PostgresDsn, RedisDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

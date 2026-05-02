@@ -11,13 +11,13 @@ Add new providers by subclassing IdentityProvider and registering in get_provide
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
-from app.db.models import KYCStatus, KYCVerification, VerificationLevel
+from app.db.models import KYCStatus, KYCVerification
 
 log = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ class SmileIDProvider(IdentityProvider):
             "source_sdk": "lendkit",
             "source_sdk_version": "0.1.0",
             "partner_id": self.api_key,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(datetime.UTC).isoformat(),
             "callback_url": f"{settings.identity_api_url}/kyc/webhooks/smile",
             "country": verification.country,
             "id_type": "BVN",

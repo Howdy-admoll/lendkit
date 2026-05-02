@@ -3,10 +3,9 @@ KYC Service — Request/Response Schemas (Pydantic v2)
 """
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any  # noqa: UP035
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
-
 
 # ---------------------------------------------------------------------------
 # Base

@@ -2,20 +2,29 @@
 KYC Service — SQLAlchemy ORM Models
 """
 import uuid
-from datetime import datetime, timezone
-from enum import Enum as PyEnum
+from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Index,
-    Integer, JSON, Numeric, String, Text, UniqueConstraint,
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(datetime.UTC)
 
 
 class Base(DeclarativeBase):
@@ -26,7 +35,7 @@ class Base(DeclarativeBase):
 # Enums
 # ---------------------------------------------------------------------------
 
-class KYCStatus(str, PyEnum):
+class KYCStatus(StrEnum):
     PENDING   = "pending"
     INITIATED = "initiated"
     IN_REVIEW = "in_review"
@@ -35,13 +44,13 @@ class KYCStatus(str, PyEnum):
     EXPIRED   = "expired"
 
 
-class VerificationLevel(str, PyEnum):
+class VerificationLevel(StrEnum):
     BASIC    = "basic"    # BVN / phone / email only
     STANDARD = "standard" # + government ID
     ENHANCED = "enhanced" # + liveness check + document scan
 
 
-class DocumentType(str, PyEnum):
+class DocumentType(StrEnum):
     NIN             = "nin"
     BVN             = "bvn"
     PASSPORT        = "passport"
@@ -50,7 +59,7 @@ class DocumentType(str, PyEnum):
     UTILITY_BILL    = "utility_bill"
 
 
-class DocumentStatus(str, PyEnum):
+class DocumentStatus(StrEnum):
     SUBMITTED  = "submitted"
     PROCESSING = "processing"
     VERIFIED   = "verified"

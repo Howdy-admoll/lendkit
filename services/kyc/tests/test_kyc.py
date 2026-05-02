@@ -2,12 +2,11 @@
 KYC Service — Identity Verification Tests
 """
 import uuid
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from app.db.models import KYCStatus, KYCVerification, VerificationLevel
-from app.services.identity import MockIdentityProvider, IdentityCheckResult
-
+from app.services.identity import MockIdentityProvider
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -95,8 +94,9 @@ class TestKYCSchemas:
         assert req.level == "standard"
 
     def test_kyc_initiate_request_invalid_level(self):
-        from app.schemas.kyc import KYCInitiateRequest
         from pydantic import ValidationError
+
+        from app.schemas.kyc import KYCInitiateRequest
 
         with pytest.raises(ValidationError):
             KYCInitiateRequest(
@@ -106,8 +106,9 @@ class TestKYCSchemas:
             )
 
     def test_kyc_initiate_request_invalid_phone(self):
-        from app.schemas.kyc import KYCInitiateRequest
         from pydantic import ValidationError
+
+        from app.schemas.kyc import KYCInitiateRequest
 
         with pytest.raises(ValidationError):
             KYCInitiateRequest(
@@ -117,8 +118,9 @@ class TestKYCSchemas:
             )
 
     def test_kyc_initiate_request_invalid_dob_format(self):
-        from app.schemas.kyc import KYCInitiateRequest
         from pydantic import ValidationError
+
+        from app.schemas.kyc import KYCInitiateRequest
 
         with pytest.raises(ValidationError):
             KYCInitiateRequest(

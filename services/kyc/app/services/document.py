@@ -140,7 +140,7 @@ class TextractDocumentProcessor(DocumentProcessor):
             )
             self.bucket = "lendkit-kyc-documents"
         except ImportError:
-            raise RuntimeError("boto3 is required for Textract provider. Run: pip install boto3")
+            raise RuntimeError("boto3 is required for Textract provider. Run: pip install boto3") from None
 
     async def upload(self, file_bytes: bytes, filename: str, content_type: str) -> str:
         key = f"documents/{uuid.uuid4().hex}/{filename}"

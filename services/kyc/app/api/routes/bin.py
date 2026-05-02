@@ -44,7 +44,7 @@ async def lookup_bin(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="BIN lookup service temporarily unavailable",
-        )
+        ) from exc
 
 
 @router.post(

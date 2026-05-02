@@ -11,7 +11,7 @@ Pluggable: swap provider in config without touching routes.
 """
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -150,7 +150,7 @@ class BINLookupService:
         self, bin_number: str, raw: dict[str, Any], resp: BINLookupResponse
     ) -> None:
         existing = await self._from_db(bin_number)
-        expires = datetime.now(timezone.utc) + timedelta(seconds=settings.bin_cache_ttl)
+        expires = datetime.now(datetime.UTC) + timedelta(seconds=settings.bin_cache_ttl)
 
         if existing:
             existing.card_brand    = resp.card_brand
@@ -164,7 +164,7 @@ class BINLookupService:
             existing.currency      = resp.currency
             existing.is_prepaid    = resp.is_prepaid
             existing.raw_response  = raw
-            existing.fetched_at    = datetime.now(timezone.utc)
+            existing.fetched_at    = datetime.now(datetime.UTC)
             existing.expires_at    = expires
         else:
             record = BINRecord(
@@ -219,7 +219,6 @@ class BINLookupService:
         """Normalize binlist.net API response to BINLookupResponse."""
         bank_data = raw.get("bank", {})
         country_data = raw.get("country", {})
-        number_data = raw.get("number", {})
 
         return BINLookupResponse(
             bin=bin_number,
@@ -261,4 +260,4 @@ class BINLookupService:
     def _is_expired(record: BINRecord) -> bool:
         if record.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > record.expires_at
+        return datetime.now(datetime.UTC) > record.expires_at
