@@ -10,7 +10,7 @@ POST   /api/v1/kyc/webhooks/{provider}  Inbound provider webhook
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -356,8 +356,8 @@ async def handle_webhook(
     verification.rejection_reason = result.rejection_reason
 
     if result.status == KYCStatus.APPROVED:
-        verification.approved_at = datetime.now(datetime.UTC)
-        verification.expires_at = datetime.now(datetime.UTC) + timedelta(days=365)
+        verification.approved_at = datetime.now(UTC)
+        verification.expires_at = datetime.now(UTC) + timedelta(days=365)
 
     await db.commit()
     return {"status": "processed"}

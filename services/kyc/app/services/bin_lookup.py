@@ -12,7 +12,7 @@ Pluggable: swap provider in config without touching routes.
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -52,7 +52,7 @@ class BINLookupService:
         cached = await self._from_redis(bin_number)
         if cached:
             log.debug("BIN cache hit (Redis): %s", bin_number)
-            return BINLookupResponse(**cached, source="cache")
+            return BINLookupResponse(**{**cached, "source": "cache"})
 
         # 2. PostgreSQL cache
         record = await self._from_db(bin_number)
@@ -149,7 +149,7 @@ class BINLookupService:
         self, bin_number: str, raw: dict[str, Any], resp: BINLookupResponse
     ) -> None:
         existing = await self._from_db(bin_number)
-        expires = datetime.now(datetime.UTC) + timedelta(seconds=settings.bin_cache_ttl)
+        expires = datetime.now(UTC) + timedelta(seconds=settings.bin_cache_ttl)
 
         if existing:
             existing.card_brand = resp.card_brand
@@ -163,7 +163,7 @@ class BINLookupService:
             existing.currency = resp.currency
             existing.is_prepaid = resp.is_prepaid
             existing.raw_response = raw
-            existing.fetched_at = datetime.now(datetime.UTC)
+            existing.fetched_at = datetime.now(UTC)
             existing.expires_at = expires
         else:
             record = BINRecord(
@@ -259,4 +259,4 @@ class BINLookupService:
     def _is_expired(record: BINRecord) -> bool:
         if record.expires_at is None:
             return False
-        return datetime.now(datetime.UTC) > record.expires_at
+        return datetime.now(UTC) > record.expires_at

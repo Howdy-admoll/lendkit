@@ -10,7 +10,7 @@ Async tasks that run outside the request cycle:
 
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from celery import Celery, Task
 from celery.utils.log import get_task_logger
@@ -128,8 +128,8 @@ async def _async_run_identity_check(task: Task, verification_id: str) -> dict:
         verification.rejection_reason = check_result.rejection_reason
 
         if check_result.status == KYCStatus.APPROVED:
-            verification.approved_at = datetime.now(datetime.UTC)
-            verification.expires_at = datetime.now(datetime.UTC) + timedelta(days=365)
+            verification.approved_at = datetime.now(UTC)
+            verification.expires_at = datetime.now(UTC) + timedelta(days=365)
 
         await db.commit()
 
@@ -224,7 +224,7 @@ async def _async_expire_stale_kyc() -> dict:
     from app.db.models import KYCStatus, KYCVerification
     from app.db.session import get_session_factory
 
-    cutoff = datetime.now(datetime.UTC) - timedelta(days=90)
+    cutoff = datetime.now(UTC) - timedelta(days=90)
     factory = get_session_factory()
 
     async with factory() as db:
@@ -270,7 +270,7 @@ async def _async_emit_kyc_event(verification_id: str, event: str) -> None:
         {
             "event": event,
             "verification_id": verification_id,
-            "timestamp": datetime.now(datetime.UTC).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "source": "kyc-service",
         }
     )
