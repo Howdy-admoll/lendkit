@@ -14,7 +14,7 @@
 
 ```bash
 # 1. Clone and configure
-git clone https://github.com/your-org/lendkit.git
+git clone https://github.com/Howdy-admoll/lendkit.git
 cd lendkit
 cp .env.example .env
 # Edit .env — at minimum set SECRET_KEY and identity provider credentials

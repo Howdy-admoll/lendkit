@@ -48,7 +48,7 @@ Open a GitHub issue using the **Feature Request** template. Describe the problem
 ```bash
 # Prerequisites: Docker, Python 3.12+, make
 
-git clone https://github.com/your-org/lendkit.git
+git clone https://github.com/Howdy-admoll/lendkit.git
 cd lendkit
 cp .env.example .env          # configure your local env
 make up-kyc                   # start KYC service + postgres + redis
@@ -127,4 +127,4 @@ Line length: 100. Type annotations required on all public functions.
 
 ## Questions?
 
-Open a [Discussion](https://github.com/your-org/lendkit/discussions) on GitHub. We're friendly.
+Open a [Discussion](https://github.com/Howdy-admoll/lendkit/discussions) on GitHub. We're friendly.
