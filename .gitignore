@@ -1,0 +1,62 @@
+# =============================================================================
+# LendKit .gitignore
+# =============================================================================
+
+# Environment & secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Type / lint caches
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+
+# ML models (binary artifacts — use a model registry)
+*.pkl
+*.joblib
+*.h5
+models/*.bin
+
+# Kubernetes secrets (never commit)
+infra/k8s/secrets.yaml
+infra/helm/lendkit/charts/
+*.kubeconfig
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs & temp
+*.log
+logs/
+tmp/

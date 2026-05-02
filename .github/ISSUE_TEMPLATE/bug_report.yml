@@ -1,0 +1,87 @@
+name: Bug Report
+description: Something isn't working correctly
+labels: ["bug", "needs-triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill out as much detail as possible.
+        **Do not include real credentials, card numbers, or customer PII.**
+
+  - type: dropdown
+    id: service
+    attributes:
+      label: Affected Service
+      options:
+        - kyc
+        - credit-scoring
+        - loan-origination
+        - repayment
+        - shared-library
+        - infra / helm
+        - docker-compose
+        - docs
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `curl http://localhost:800X/health | jq .version`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: |
+        How do we reproduce this? Include curl commands, request payloads, or test cases.
+      placeholder: |
+        1. POST /api/v1/kyc/ with payload `{...}`
+        2. Then GET /api/v1/kyc/{id}
+        3. Observe error in response
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Paste relevant log output (sanitize any secrets/PII)
+      render: shell
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Docker Compose / Kubernetes / local Python"
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I have removed any secrets, API keys, or PII from this report
+          required: true

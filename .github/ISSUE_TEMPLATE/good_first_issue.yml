@@ -1,0 +1,69 @@
+name: Good First Issue
+description: A well-scoped task for first-time contributors
+labels: ["good first issue", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to create clearly-scoped tasks for new contributors.
+
+  - type: input
+    id: title
+    attributes:
+      label: Task summary
+      placeholder: "Implement PaystackDisbursementService in loan-origination"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: service
+    attributes:
+      label: Service
+      options:
+        - kyc
+        - credit-scoring
+        - loan-origination
+        - repayment
+        - shared-library
+        - infra
+        - docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Background
+      description: Why does this need to exist? What should the contributor read first?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know when this is done?
+      placeholder: |
+        - [ ] Service class implements `DisbursementProvider` abstract base
+        - [ ] Unit tests pass with mock HTTP responses
+        - [ ] Environment variable documented in .env.example
+        - [ ] Added to CONTRIBUTING.md good first issues table
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated Effort
+      options:
+        - "Small (< 2 hours)"
+        - "Medium (half day)"
+        - "Large (1–2 days)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: Hints & Pointers
+      description: Specific files to look at, similar patterns to follow
