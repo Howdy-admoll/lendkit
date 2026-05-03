@@ -31,7 +31,12 @@ def upgrade() -> None:
         sa.Column(
             "status",
             sa.Enum(
-                "pending", "initiated", "in_review", "approved", "rejected", "expired",
+                "pending",
+                "initiated",
+                "in_review",
+                "approved",
+                "rejected",
+                "expired",
                 name="kycstatus",
             ),
             nullable=False,
@@ -100,7 +105,12 @@ def upgrade() -> None:
         sa.Column(
             "document_type",
             sa.Enum(
-                "nin", "bvn", "passport", "drivers_license", "voters_card", "utility_bill",
+                "nin",
+                "bvn",
+                "passport",
+                "drivers_license",
+                "voters_card",
+                "utility_bill",
                 name="documenttype",
             ),
             nullable=False,

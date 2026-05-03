@@ -9,7 +9,8 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -42,7 +43,7 @@ def create_access_token(
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
-    """Decode and validate a JWT. Raises JWTError on failure."""
+    """Decode and validate a JWT. Raises InvalidTokenError on failure."""
     return jwt.decode(
         token,
         settings.secret_key,
@@ -55,7 +56,7 @@ def verify_token(token: str) -> str | None:
     try:
         payload = decode_access_token(token)
         return payload.get("sub")
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 

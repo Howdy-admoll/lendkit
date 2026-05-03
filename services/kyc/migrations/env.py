@@ -32,6 +32,7 @@ target_metadata = Base.metadata
 # DB URL resolution — env var wins over alembic.ini
 # ---------------------------------------------------------------------------
 
+
 def get_url() -> str:
     """
     Resolve the database URL.
@@ -52,6 +53,7 @@ def get_url() -> str:
 # ---------------------------------------------------------------------------
 # Offline mode — emit raw SQL without connecting to DB
 # ---------------------------------------------------------------------------
+
 
 def run_migrations_offline() -> None:
     """
@@ -76,6 +78,7 @@ def run_migrations_offline() -> None:
 # ---------------------------------------------------------------------------
 # Online mode — connect to DB and apply migrations
 # ---------------------------------------------------------------------------
+
 
 def do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
     context.configure(
