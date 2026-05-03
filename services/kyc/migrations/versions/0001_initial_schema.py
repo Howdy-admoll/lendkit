@@ -19,34 +19,9 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     # ---------------------------------------------------------------------------
-    # Enum types
-    # ---------------------------------------------------------------------------
-    kycstatus = postgresql.ENUM(
-        "pending", "initiated", "in_review", "approved", "rejected", "expired",
-        name="kycstatus",
-    )
-    kycstatus.create(op.get_bind(), checkfirst=True)
-
-    verificationlevel = postgresql.ENUM(
-        "basic", "standard", "enhanced",
-        name="verificationlevel",
-    )
-    verificationlevel.create(op.get_bind(), checkfirst=True)
-
-    documenttype = postgresql.ENUM(
-        "nin", "bvn", "passport", "drivers_license", "voters_card", "utility_bill",
-        name="documenttype",
-    )
-    documenttype.create(op.get_bind(), checkfirst=True)
-
-    documentstatus = postgresql.ENUM(
-        "submitted", "processing", "verified", "rejected",
-        name="documentstatus",
-    )
-    documentstatus.create(op.get_bind(), checkfirst=True)
-
-    # ---------------------------------------------------------------------------
     # kyc_verifications
+    # Enum types (kycstatus, verificationlevel) are created by SQLAlchemy
+    # automatically on first use — do not call .create() separately.
     # ---------------------------------------------------------------------------
     op.create_table(
         "kyc_verifications",
@@ -58,14 +33,13 @@ def upgrade() -> None:
             sa.Enum(
                 "pending", "initiated", "in_review", "approved", "rejected", "expired",
                 name="kycstatus",
-                create_type=False,
             ),
             nullable=False,
             server_default="pending",
         ),
         sa.Column(
             "level",
-            sa.Enum("basic", "standard", "enhanced", name="verificationlevel", create_type=False),
+            sa.Enum("basic", "standard", "enhanced", name="verificationlevel"),
             nullable=False,
             server_default="basic",
         ),
@@ -106,13 +80,13 @@ def upgrade() -> None:
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
     )
-
     op.create_index("ix_kyc_customer_id", "kyc_verifications", ["customer_id"])
     op.create_index("ix_kyc_status", "kyc_verifications", ["status"])
     op.create_index("ix_kyc_created_at", "kyc_verifications", ["created_at"])
 
     # ---------------------------------------------------------------------------
     # kyc_documents
+    # Enum types (documenttype, documentstatus) created on first use here.
     # ---------------------------------------------------------------------------
     op.create_table(
         "kyc_documents",
@@ -128,18 +102,13 @@ def upgrade() -> None:
             sa.Enum(
                 "nin", "bvn", "passport", "drivers_license", "voters_card", "utility_bill",
                 name="documenttype",
-                create_type=False,
             ),
             nullable=False,
         ),
         sa.Column("document_number", sa.String(64), nullable=True),
         sa.Column(
             "status",
-            sa.Enum(
-                "submitted", "processing", "verified", "rejected",
-                name="documentstatus",
-                create_type=False,
-            ),
+            sa.Enum("submitted", "processing", "verified", "rejected", name="documentstatus"),
             nullable=False,
             server_default="submitted",
         ),
@@ -161,12 +130,11 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-
     op.create_index("ix_doc_verification_id", "kyc_documents", ["verification_id"])
     op.create_index("ix_doc_type_status", "kyc_documents", ["document_type", "status"])
 
     # ---------------------------------------------------------------------------
-    # bin_records
+    # bin_records  (no enums — all plain scalar types)
     # ---------------------------------------------------------------------------
     op.create_table(
         "bin_records",
@@ -196,9 +164,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("bin_records")
+
     op.drop_index("ix_doc_type_status", table_name="kyc_documents")
     op.drop_index("ix_doc_verification_id", table_name="kyc_documents")
     op.drop_table("kyc_documents")
+
     op.drop_index("ix_kyc_created_at", table_name="kyc_verifications")
     op.drop_index("ix_kyc_status", table_name="kyc_verifications")
     op.drop_index("ix_kyc_customer_id", table_name="kyc_verifications")
