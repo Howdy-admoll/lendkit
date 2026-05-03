@@ -101,6 +101,14 @@ jobs:
           # Install shared library as editable path dep (not on PyPI)
           pip install -e "../../shared" --no-deps 2>/dev/null || true
 
+      - name: Run migrations — ${{ matrix.service }}
+        env:
+          DB_URL: postgresql+asyncpg://lendkit:lendkit@localhost:5432/kyc_test
+          SECRET_KEY: ci-test-secret-key-do-not-use-in-production-32ch
+        run: |
+          cd services/${{ matrix.service }}
+          alembic upgrade head
+
       - name: Run tests — ${{ matrix.service }}
         env:
           SECRET_KEY: ci-test-secret-key-do-not-use-in-production-32ch
