@@ -159,6 +159,12 @@ def compute_score(
     raw_awarded = sum(f.points_awarded for f in factors if f.is_available)
     raw_max = sum(f.points_possible for f in factors if f.is_available)
 
+    # Also apply penalty-only factors (points_possible=0 but points_awarded < 0)
+    # e.g. PEP flag — not a scoreable bonus, but the penalty must still reduce the score
+    raw_awarded += sum(
+        f.points_awarded for f in factors if not f.is_available and f.points_awarded < 0
+    )
+
     if raw_max == 0:
         # No signals available — can't score
         return ScoringResult(
