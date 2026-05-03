@@ -24,11 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
+# Pin pip to latest to avoid pip CVEs showing up in Trivy scans
+RUN pip install "pip>=25.1.1" --upgrade
+
 COPY pyproject.toml ./
 # Copy app package so hatchling can resolve the editable install
 COPY app/ ./app/
 
-RUN pip install --upgrade pip && pip install .
+RUN pip install .
 
 # --------------- Development stage (hot-reload, includes dev deps) -----------
 FROM python:3.12-slim AS development

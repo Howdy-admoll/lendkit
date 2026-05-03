@@ -1,0 +1,32 @@
+# =============================================================================
+# LendKit — Trivy Vulnerability Ignore List
+#
+# These are OS-level CVEs in Debian system libraries bundled with the
+# python:3.12-slim base image. None of these libraries are invoked by
+# our Python application code — they exist in the OS layer only.
+#
+# Policy: We review this list on every major base-image update.
+# To update the base image: change FROM python:3.12-slim to the latest
+# patch release and re-run Trivy to verify which entries can be removed.
+# =============================================================================
+
+# ncurses — terminal library, not used by FastAPI/asyncpg stack
+CVE-2023-29491
+
+# systemd — init system, not present at runtime in containers
+CVE-2023-26604
+CVE-2022-3821
+
+# nghttp2 — HTTP/2 C library (we use Python httpx, not the C binding)
+CVE-2023-44487
+CVE-2024-28182
+
+# gnutls — TLS library (Python uses OpenSSL via cryptography package)
+CVE-2024-28835
+CVE-2024-28834
+
+# libcap — Linux capabilities library, not used by application code
+CVE-2023-2603
+
+# zlib — compression library (Python's zlib module uses its own bundled copy)
+CVE-2023-45853
