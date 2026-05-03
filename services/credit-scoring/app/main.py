@@ -1,121 +1,226 @@
 """
-LendKit — Credit Scoring Engine
+LendKit — Credit Scoring Service
 
-Pluggable fuzzy-logic + rule-based credit decisioning.
-Emits a credit_score (300–850 range) and a decision (approve | review | decline).
-
-Architecture:
-  - RuleEngine: evaluates deterministic policy rules first (hard cutoffs)
-  - FuzzyScorer: applies weighted fuzzy membership functions for nuanced scoring
-  - MLScorer: optional gradient-boosted model overlay (scikit-learn / XGBoost)
-  - DecisionAggregator: merges outputs into a final CreditDecision
-
-Status: SCAFFOLD — route stubs defined, core engine to be implemented.
-        See docs/credit-scoring-design.md for the full specification.
-        Good first issue: implement FuzzyScorer with skfuzzy.
+Rule-based credit scoring engine that consumes KYC events and provides
+loan decisioning signals for the loan origination service.
 """
-from fastapi import FastAPI, status
-from pydantic import BaseModel, Field
-from typing import Literal
+
+import asyncio
+import logging
+import time
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+
+from app.api.routes.scores import customer_router
+from app.api.routes.scores import router as scores_router
+from app.core.config import settings
+from app.db.session import close_engine
+from app.workers.kyc_consumer import KYCEventConsumer
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer()
+        if not settings.is_development
+        else structlog.dev.ConsoleRenderer(),
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+log = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+REQUEST_COUNT = Counter(
+    "lendkit_credit_scoring_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status_code"],
+)
+REQUEST_DURATION = Histogram(
+    "lendkit_credit_scoring_request_duration_seconds",
+    "HTTP request duration",
+    ["method", "endpoint"],
+)
+
+# ---------------------------------------------------------------------------
+# KYC consumer background task
+# ---------------------------------------------------------------------------
+
+_kyc_consumer: KYCEventConsumer | None = None
+_consumer_task: asyncio.Task | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    global _kyc_consumer, _consumer_task
+
+    log.info(
+        "credit_scoring.starting",
+        env=settings.app_env,
+        port=settings.service_port,
+    )
+
+    if settings.otel_enabled:
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+        resource = Resource(attributes={SERVICE_NAME: settings.otel_service_name})
+        provider = TracerProvider(resource=resource)
+        provider.add_span_processor(
+            BatchSpanProcessor(OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint))
+        )
+        trace.set_tracer_provider(provider)
+        log.info("otel.tracing_enabled")
+
+    # Start the KYC event consumer in the background
+    _kyc_consumer = KYCEventConsumer()
+    _consumer_task = asyncio.create_task(_kyc_consumer.run(), name="kyc-event-consumer")
+    log.info("kyc_consumer.task_started")
+
+    yield
+
+    # Graceful shutdown
+    log.info("credit_scoring.shutting_down")
+    if _kyc_consumer:
+        _kyc_consumer.stop()
+    if _consumer_task:
+        _consumer_task.cancel()
+        try:
+            await asyncio.wait_for(_consumer_task, timeout=10)
+        except (TimeoutError, asyncio.CancelledError):
+            pass
+    await close_engine()
+
+
+# ---------------------------------------------------------------------------
+# FastAPI App
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="LendKit Credit Scoring Service",
-    description="Fuzzy logic + rule-based credit decisioning engine",
-    version="0.1.0-alpha",
+    description="""
+## Credit Scoring Microservice
+
+Part of the **LendKit** open-source lending platform infrastructure.
+
+### Scoring Engine
+A transparent, rule-based weighted scoring system that evaluates four signal categories:
+
+| Signal Bucket         | Weight |
+|-----------------------|--------|
+| KYC Outcome           | 35 pts |
+| Identity Verification | 25 pts |
+| Income & Employment   | 25 pts |
+| Repayment History     | 15 pts |
+
+Raw points are mapped onto a **300–850 FICO-like scale**.
+
+### Tiers
+| Score Range | Tier      | Decision                   |
+|-------------|-----------|----------------------------|
+| 750–850     | Excellent | Best rates, highest limits |
+| 650–749     | Good      | Competitive rates          |
+| 550–649     | Fair      | Standard rates             |
+| 450–549     | Poor      | Entry-level products       |
+| < 450       | Very Poor | Decline                    |
+
+### Event-Driven Scoring
+The service automatically computes a score when a KYC verification is approved,
+by consuming events from the `lendkit:kyc:events` Redis Stream.
+
+### Authentication
+All endpoints require a `Bearer` JWT in the `Authorization` header.
+    """,
+    version="0.1.0",
+    docs_url="/docs" if not settings.is_production else None,
+    redoc_url="/redoc" if not settings.is_production else None,
+    openapi_url="/openapi.json" if not settings.is_production else None,
+    lifespan=lifespan,
+)
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if settings.is_development else [],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
 
-class CreditScoreRequest(BaseModel):
-    customer_id: str
-    tenant_id: str
-    kyc_verification_id: str
-    monthly_income: float = Field(..., gt=0, description="Monthly income in base currency")
-    employment_type: Literal["salaried", "self_employed", "unemployed", "retired"]
-    employment_duration_months: int = Field(..., ge=0)
-    existing_loans_count: int = Field(default=0, ge=0)
-    existing_monthly_obligations: float = Field(default=0.0, ge=0)
-    requested_amount: float = Field(..., gt=0)
-    requested_tenure_months: int = Field(..., ge=1, le=360)
-    bureau_score: int | None = Field(None, ge=300, le=850, description="External bureau score if available")
-
-
-class CreditDecision(BaseModel):
-    customer_id: str
-    score: int = Field(..., ge=300, le=850)
-    decision: Literal["approve", "review", "decline"]
-    max_amount: float
-    recommended_rate: float   # APR
-    recommended_tenure: int   # months
-    factors: list[str]        # human-readable score factors
-    model_version: str
+    endpoint = request.url.path
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=endpoint,
+        status_code=response.status_code,
+    ).inc()
+    REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
+    response.headers["X-Request-Duration"] = f"{duration:.4f}s"
+    return response
 
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/health", tags=["System"])
-async def health():
-    return {"status": "healthy", "service": "credit-scoring", "version": "0.1.0-alpha"}
+app.include_router(scores_router, prefix="/api/v1")
+app.include_router(customer_router, prefix="/api/v1")
 
 
-@app.post(
-    "/api/v1/score",
-    response_model=CreditDecision,
-    status_code=status.HTTP_200_OK,
-    tags=["Credit Scoring"],
-    summary="Score a loan applicant",
-)
-async def score_applicant(payload: CreditScoreRequest) -> CreditDecision:
-    """
-    TODO: Implement full scoring pipeline:
-    1. Pull KYC verification result from KYC service
-    2. Run hard policy rules (income floor, age, blacklist check)
-    3. Apply fuzzy membership functions (DTI ratio, employment stability)
-    4. Overlay ML model if available
-    5. Aggregate into final CreditDecision
-
-    Currently returns a mock decision for scaffold purposes.
-    See: services/credit-scoring/app/engine/ for implementation stubs
-    """
-    # Stub: simple rule-based approximation
-    dti = payload.existing_monthly_obligations / payload.monthly_income if payload.monthly_income else 1.0
-
-    if dti > 0.6:
-        decision = "decline"
-        score = 380
-    elif dti > 0.4:
-        decision = "review"
-        score = 580
-    else:
-        decision = "approve"
-        score = 720
-
-    if payload.bureau_score:
-        score = int(score * 0.4 + payload.bureau_score * 0.6)
-
-    return CreditDecision(
-        customer_id=payload.customer_id,
-        score=score,
-        decision=decision,
-        max_amount=min(payload.requested_amount, payload.monthly_income * 6),
-        recommended_rate=0.24 if decision == "approve" else 0.30,
-        recommended_tenure=min(payload.requested_tenure_months, 24),
-        factors=[
-            f"DTI ratio: {dti:.1%}",
-            f"Employment: {payload.employment_type}",
-            f"Tenure: {payload.employment_duration_months} months",
-        ],
-        model_version="stub-v0.1",
-    )
+# ---------------------------------------------------------------------------
+# Core endpoints
+# ---------------------------------------------------------------------------
 
 
-@app.get("/api/v1/score/{customer_id}", tags=["Credit Scoring"])
-async def get_latest_score(customer_id: str):
-    """Get the most recent credit score for a customer."""
-    # TODO: query scores DB
-    return {"customer_id": customer_id, "status": "not_implemented"}
+@app.get("/health", tags=["System"], summary="Health check")
+async def health() -> dict:
+    consumer_running = _consumer_task is not None and not _consumer_task.done()
+    return {
+        "status": "healthy",
+        "service": "credit-scoring",
+        "version": "0.1.0",
+        "environment": settings.app_env,
+        "kyc_consumer": "running" if consumer_running else "stopped",
+    }
+
+
+@app.get("/metrics", tags=["System"], include_in_schema=False)
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/", include_in_schema=False)
+async def root() -> dict:
+    return {"service": "lendkit-credit-scoring", "docs": "/docs"}
