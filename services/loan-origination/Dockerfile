@@ -1,14 +1,56 @@
-FROM python:3.12-slim AS base
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+# ──────────────────────────────────────────────────────────────────────────────
+# Stage 1: builder — compile C extensions (asyncpg, hiredis)
+# ──────────────────────────────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc \
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+RUN pip install --upgrade "pip>=25.1.1"
+
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install -e ".[dev]"
-FROM base AS development
+RUN pip install ".[dev]"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Stage 2: production image
+# ──────────────────────────────────────────────────────────────────────────────
+FROM python:3.12-slim AS production
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/venv/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq5 \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /venv /venv
+
+WORKDIR /app
 COPY . .
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-FROM base AS production
-COPY . .
-RUN addgroup --system lendkit && adduser --system --group lendkit && chown -R lendkit:lendkit /app
+
+RUN addgroup --system lendkit \
+    && adduser --system --ingroup lendkit lendkit \
+    && chown -R lendkit:lendkit /app
+
 USER lendkit
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+EXPOSE 8003
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8003/health || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--workers", "2"]
