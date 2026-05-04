@@ -11,7 +11,7 @@
 [![Kubernetes](https://img.shields.io/badge/kubernetes-helm-326CE5.svg)](https://helm.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Production-grade playbooks for deploying credit decisioning systems, loan origination workflows, and risk management infrastructure.
+Production-grade microservices covering the full loan lifecycle — identity verification, credit decisioning, loan origination, and repayment tracking.
 
 [Quickstart](#quickstart) · [Architecture](#architecture) · [Services](#services) · [Roadmap](#roadmap) · [Contributing](#contributing)
 
@@ -21,23 +21,27 @@ Production-grade playbooks for deploying credit decisioning systems, loan origin
 
 ## What is LendKit?
 
-LendKit is a collection of independently deployable microservices that cover the full loan lifecycle — from identity verification to default detection. It is designed to be:
+LendKit is a collection of independently deployable microservices that cover the full loan lifecycle — from identity verification to default detection and collections. It is designed to be:
 
 - **Self-hostable** — deploy on any Kubernetes cluster or with Docker Compose in minutes
 - **Provider-agnostic** — swap identity providers, payment gateways, and cloud services without touching your business logic
-- **Production-ready** — async by default, structured logging, Prometheus metrics, OpenTelemetry tracing, HPA, zero-downtime deploys
+- **Production-ready** — async by default, structured logging, Prometheus metrics, multi-stage Docker builds, zero-downtime deploys
 - **Africa-first, globally applicable** — built with BVN, NIN, NUBAN, and Naira/Kobo in mind; easily extended for other markets
+- **Auditable by design** — crisp rule-based credit scoring (not fuzzy logic) so every decision can be explained to a customer or regulator in plain language
 
 ---
 
 ## Services
 
-| Service | Port | Status | Description |
-|---|---|---|---|
-| **KYC / BIN** | `:8001` | ✅ Implemented | Identity verification, BIN lookup, document OCR |
-| **Credit Scoring** | `:8002` | 🚧 Scaffold | Fuzzy logic + rule-based credit decisioning |
-| **Loan Origination** | `:8003` | 🚧 Scaffold | Application → approval → disbursement pipeline |
-| **Repayment** | `:8004` | 🚧 Scaffold | Repayment tracking, delinquency, default detection |
+| Service | Port | Status | Tests | Description |
+|---|---|---|---|---|
+| **KYC** | `:8001` | ✅ Production-ready | ✓ Full suite | Identity verification, BVN/NIN, document OCR, liveness |
+| **Credit Scoring** | `:8002` | ✅ Production-ready | ✓ 43 passing | 10-rule scoring engine, tier classification, PEP screening |
+| **Loan Origination** | `:8003` | ✅ Production-ready | ✓ 25 passing | Underwriting, DTI guard, 9-state loan lifecycle, offer management |
+| **Repayment Tracking** | `:8004` | ✅ Production-ready | ✓ 66 passing | Amortization schedule, payment allocation, delinquency & default detection |
+| **Disbursement** | `:8005` | 🔜 Next | — | Paystack/Flutterwave payout, disbursement state machine |
+| **Notifications** | `:8006` | 🔜 Next | — | SMS/email/push for loan events and payment reminders |
+| **Collections** | `:8007` | 📋 Planned | — | Automated collections workflow, agent queue, escalation rules |
 
 ---
 
@@ -54,25 +58,27 @@ cd lendkit
 cp .env.example .env
 # Set at minimum: SECRET_KEY (run `make generate-secret` to generate one)
 
-# 3. Start KYC + infrastructure
-make up-kyc
+# 3. Start all services
+make up
 
 # 4. Run migrations
-make migrate-kyc
+make migrate-all
 
-# 5. Verify
-curl http://localhost:8001/health
-# {"status": "healthy", "service": "kyc", "version": "0.1.0"}
+# 5. Verify each service
+curl http://localhost:8001/health   # KYC
+curl http://localhost:8002/health   # Credit Scoring
+curl http://localhost:8003/health   # Loan Origination
+curl http://localhost:8004/health   # Repayment
 
-# 6. Open API docs
-open http://localhost:8001/docs
+# 6. Open API docs (any service)
+open http://localhost:8003/docs
 ```
 
-Start all services:
+Start individual services:
 ```bash
-make up          # all 4 services + postgres + redis + celery workers
-make logs        # tail all logs
-open http://localhost:5555   # Flower (Celery monitoring)
+make up-kyc        # KYC + postgres + redis only
+make up-scoring    # Credit Scoring only
+make logs          # tail all logs
 ```
 
 ---
@@ -81,26 +87,121 @@ open http://localhost:5555   # Flower (Celery monitoring)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          API Gateway / Ingress                       │
-└────────┬────────────┬───────────────┬──────────────────┬────────────┘
-         │            │               │                  │
-    ┌────▼───┐  ┌─────▼──────┐  ┌────▼──────┐  ┌───────▼──────┐
-    │  KYC   │  │  Credit    │  │  Loan     │  │  Repayment   │
-    │ :8001  │  │ Scoring    │  │Origination│  │   :8004      │
-    └────┬───┘  └─────┬──────┘  └────┬──────┘  └───────┬──────┘
-         └────────────┴───────────────┴──────────────────┘
-                              │
-                   Redis Streams / Kafka
-                   (domain events bus)
+│                        API Gateway / Ingress                         │
+└──────┬──────────────┬─────────────────┬─────────────────┬───────────┘
+       │              │                 │                 │
+  ┌────▼───┐  ┌───────▼──────┐  ┌──────▼──────┐  ┌──────▼──────┐
+  │  KYC   │  │    Credit    │  │    Loan     │  │  Repayment  │
+  │ :8001  │  │   Scoring    │  │ Origination │  │   :8004     │
+  │        │  │    :8002     │  │    :8003    │  │             │
+  └────┬───┘  └───────┬──────┘  └──────┬──────┘  └──────┬──────┘
+       └──────────────┴─────────────────┴─────────────────┘
+                                │
+                     Redis Streams (domain events)
+                     kyc.events · loan.events · repayment.events
 ```
 
-Each service owns its PostgreSQL database. Services communicate via HTTP (sync) and Redis Streams/Kafka events (async). Read the full [architecture doc](docs/architecture.md).
+Each service owns its own PostgreSQL database — no shared schema. Services communicate via HTTP for synchronous calls (origination → scoring) and Redis Streams for async domain events (e.g. `loan.disbursed` triggers repayment service to create the loan account).
+
+---
+
+## Loan Lifecycle
+
+A complete end-to-end flow through all four services:
+
+```
+Customer applies
+      │
+      ▼
+KYC Service (:8001)
+  BVN/NIN lookup → document verification → liveness check
+  Emits: kyc.verified
+      │
+      ▼
+Credit Scoring (:8002)
+  Scores 10 rules → weighted aggregate → tier assignment
+  Tiers: excellent (≥750) · good (≥650) · fair (≥550) · poor/very_poor → declined
+  Emits: score.computed
+      │
+      ▼
+Loan Origination (:8003)
+  Underwriting: tier check → amount cap → tenure cap → DTI guard (40% limit)
+  9-state machine: DRAFT → UNDERWRITING → APPROVED → OFFER_SENT →
+    OFFER_ACCEPTED → DISBURSING → ACTIVE | REJECTED | CANCELLED
+  Emits: loan.offer_accepted
+      │
+      ▼
+Repayment Tracking (:8004)
+  Generates amortization schedule (reducing-balance, ceil-rounded)
+  Applies payments: penalty → interest → principal
+  Delinquency: 0 DPD=CURRENT · 1-7=AT_RISK · 8-89=DELINQUENT · 90+=DEFAULT
+  Hourly sweep updates DPD, accrues daily penalty (0.1%/day)
+```
+
+---
+
+## Credit Scoring — How It Works
+
+LendKit uses **crisp rule-based scoring** — not fuzzy logic. Each rule maps a metric to a fixed point value via hard brackets. This was a deliberate design choice: crisp rules are auditable, testable, and straightforward to explain to regulators and customers in dispute resolution.
+
+| Rule | Max Points | What It Measures |
+|---|---|---|
+| On-time repayment rate | 8 | % of historical payments made on time |
+| Outstanding debt ratio | 7 | Current debt relative to income |
+| Credit utilisation | 6 | % of available credit in use |
+| Income stability | 6 | Employment type and tenure |
+| Loan tenure fit | 5 | Alignment of requested tenure with income cycle |
+| Account age | 5 | Length of credit history |
+| Inquiry frequency | 4 | Recent hard credit checks |
+| Derogatory marks | 4 | Defaults, write-offs on record |
+| Loan diversity | 4 | Mix of credit product types |
+| **PEP flag** | **−20 penalty** | Politically Exposed Person screening |
+
+Final score → tier → APR and loan limits applied in origination.
+
+---
+
+## Underwriting Engine
+
+The underwriting engine runs four sequential checks, capping or adjusting the proposal rather than binary-rejecting where possible:
+
+1. **Tier eligibility** — `poor` and `very_poor` tiers are declined outright
+2. **Amount cap** — approved amount is capped at the tier maximum
+3. **Tenure cap** — capped at tier maximum months
+4. **DTI guard** — if monthly repayment would exceed 40% of stated income, the loan amount is back-calculated to the maximum the borrower can actually afford rather than declining outright
+
+| Tier | Max Loan | Max Tenure | APR |
+|---|---|---|---|
+| Excellent (≥750) | ₦5,000,000 | 36 months | 18% |
+| Good (≥650) | ₦2,000,000 | 24 months | 24% |
+| Fair (≥550) | ₦500,000 | 12 months | 36% |
+
+---
+
+## Repayment & Default Detection
+
+**Amortization schedule** — generated at disbursement using the standard reducing-balance formula (`P × r × (1+r)^n / ((1+r)^n − 1)`), always rounded up (lender-safe). Month-end date clamping handles Jan 31 → Feb 28/29 correctly. The final installment absorbs any accumulated rounding drift so the schedule zeroes out exactly.
+
+**Payment allocation** — each payment is split in strict priority order:
+1. Accrued penalties (highest priority — lender recoup)
+2. Accrued interest
+3. Outstanding principal
+
+**Delinquency classification** — CBN-aligned thresholds, configurable per tenant:
+
+| DPD | Status | Action |
+|---|---|---|
+| 0 | CURRENT | None |
+| 1–7 | AT_RISK | Grace period — no penalty clock |
+| 8–89 | DELINQUENT | 0.1%/day penalty, collections engaged |
+| 90+ | DEFAULT | Recovery escalation |
+| 360+ | WRITTEN_OFF | Balance write-off candidate |
+
+An hourly background sweep (`delinquency_worker`) updates DPD across all active loan accounts and accrues daily penalties.
 
 ---
 
 ## KYC Service — Deep Dive
-
-The most complete service. Features:
 
 **BIN Lookup (3-tier cache)**
 ```
@@ -114,7 +215,6 @@ Keeps external API costs near zero for repeat BINs.
 - `enhanced` — + liveness check + document authenticity scoring
 
 **Pluggable providers**
-
 ```python
 # Switch provider in .env — no code changes needed
 IDENTITY_PROVIDER=smile_id   # Smile Identity (default for Africa)
@@ -122,9 +222,7 @@ IDENTITY_PROVIDER=onfido     # Onfido (global)
 IDENTITY_PROVIDER=mock       # Deterministic mock for dev/CI
 ```
 
-**Async by default**
-
-Identity checks and document OCR are queued via Celery — HTTP responses are immediate, status is polled or delivered via webhook.
+**Async by default** — identity checks and document OCR are queued via Celery. HTTP responses are immediate; status is polled or delivered via webhook.
 
 ---
 
@@ -136,12 +234,29 @@ Copy `.env.example` to `.env`. Key variables:
 |---|---|---|
 | `SECRET_KEY` | ✅ | JWT signing key — generate with `make generate-secret` |
 | `IDENTITY_PROVIDER` | | `smile_id` / `onfido` / `mock` (default: `mock`) |
-| `IDENTITY_API_KEY` | Prod | Your provider API key |
+| `IDENTITY_API_KEY` | Prod | Your identity provider API key |
 | `DOCUMENT_PROVIDER` | | `aws_textract` / `mock` (default: `mock`) |
-| `BIN_API_KEY` | | BIN lookup API key (optional, works without one) |
 | `EVENT_BACKEND` | | `redis` / `kafka` (default: `redis`) |
+| `PAYSTACK_SECRET` | Prod | Paystack webhook secret (repayment service) |
+| `FLUTTERWAVE_SECRET` | Prod | Flutterwave webhook secret (repayment service) |
 
 See `.env.example` for the complete reference.
+
+---
+
+## Running Tests
+
+Each service's engine tests are pure Python — no database or HTTP calls needed:
+
+```bash
+# Individual services
+cd services/credit-scoring  && pytest tests/ -v   # 43 tests
+cd services/loan-origination && pytest tests/ -v  # 25 tests
+cd services/repayment        && pytest tests/ -v  # 66 tests
+
+# Or push and let CI run everything
+git push   # GitHub Actions runs all suites, Docker builds, and security scan
+```
 
 ---
 
@@ -156,7 +271,6 @@ make down-volumes # stop + delete all data
 
 ### Kubernetes (production)
 ```bash
-# Apply manifests directly
 kubectl apply -f infra/k8s/
 
 # Or use Helm
@@ -165,48 +279,54 @@ helm install lendkit infra/helm/lendkit \
   --values infra/helm/lendkit/values.yaml
 ```
 
-See the [KYC Deployment Playbook](docs/playbooks/kyc-deployment.md) for a full production runbook including scaling guidelines, monitoring setup, and incident response runbooks.
-
 ---
 
 ## Roadmap
 
-### v0.2 — Credit Scoring Engine
-- [ ] `FuzzyScorer` implementation with `skfuzzy` (fuzzy logic membership functions)
-- [ ] Hard policy rules engine (income floor, blacklist, DTI cutoffs)
-- [ ] Bureau score integration (CRC, First Central)
-- [ ] Alembic migrations for all services
+### ✅ Phase 1 — Core Lending Pipeline (complete)
+- [x] KYC service — identity verification, BVN/NIN, document OCR, liveness
+- [x] Credit scoring — 10-rule crisp engine, PEP screening, tier classification (43 tests)
+- [x] Loan origination — underwriting engine, DTI guard, 9-state lifecycle, offer management (25 tests)
+- [x] Repayment tracking — amortization schedule, payment allocation, delinquency & default detection (66 tests)
+- [x] CI pipeline — lint, unit tests per service, Docker build, Trivy security scan, GHCR publish
 
-### v0.3 — Loan Origination
-- [ ] Paystack disbursement provider
-- [ ] Flutterwave disbursement provider
-- [ ] Loan offer generation and acceptance flow
-- [ ] Automated underwriting rules
+### 🔜 Phase 2 — Money Movement & Communications
+- [ ] Disbursement service — Paystack/Flutterwave payout, idempotent disbursement state machine
+- [ ] Notification service — SMS, email & push (approval alerts, due date reminders, missed payment warnings)
+- [ ] Collections service — automated collections workflow, agent assignment queue, escalation rules
 
-### v0.4 — Repayment & Collections
-- [ ] Amortization schedule generation
-- [ ] Direct debit mandate management
-- [ ] Collections workflow triggers
-- [ ] Delinquency cohort reporting
+### 📋 Phase 3 — Platform & Operations
+- [ ] API Gateway — JWT auth, tenant routing, rate limiting, request logging
+- [ ] Admin dashboard — loan officer UI, manual override, borrower profiles (React)
+- [ ] Reporting & analytics — portfolio health, NPL ratios, disbursement volumes, cohort analysis
+- [ ] Tenant management — per-tenant APR, DPD thresholds, grace period, feature flags
+- [ ] Webhook relay — signed outbound webhooks to tenant systems with retry backoff
 
-### v0.5 — Observability & Multi-tenancy
-- [ ] Grafana dashboards (KYC, Loan, Repayment)
-- [ ] Per-tenant configuration and rate limits
+### 📋 Phase 4 — Infrastructure
+- [ ] Complete Kubernetes manifests — HPA, resource limits, secrets management, ingress
+- [ ] Observability stack — Prometheus metrics, Grafana dashboards, Loki log aggregation
+- [ ] Helm chart — single `helm install` for the full LendKit stack
+- [ ] CD pipeline — GitHub Actions → GHCR → k8s rolling deploy with smoke tests and auto-rollback
 - [ ] Multi-currency support (USD, KES, GHS, ZAR)
-- [ ] KEDA-based worker autoscaling
+
+---
+
+## Documentation
+
+Full technical documentation covering architecture, service internals, the scoring engine, underwriting logic, a worked end-to-end borrower example, API reference, and a developer guide is available in [`docs/LendKit_Technical_Documentation.docx`](docs/LendKit_Technical_Documentation.docx).
 
 ---
 
 ## Contributing
 
-We welcome contributions of all sizes. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, PR guidelines, and a list of **good first issues** explicitly scoped for new contributors.
+We welcome contributions of all sizes. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, PR guidelines, and good first issues.
 
-Key areas looking for contributors:
-- `FuzzyScorer` in credit-scoring (Python + skfuzzy)
-- `OnfidoProvider` in KYC (Python + REST)
-- `PaystackDisbursementService` (Python + REST)
-- `AmortizationSchedule.generate()` (financial math)
-- Grafana dashboard JSON
+Key areas actively looking for contributors:
+- `PaystackDisbursementService` — upcoming disbursement service (Python + REST)
+- `OnfidoProvider` — KYC integration (Python + REST)
+- Grafana dashboard JSON for loan and repayment metrics
+- Helm chart authoring
+- Multi-currency support (USD, KES, GHS, ZAR)
 
 ---
 
