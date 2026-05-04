@@ -311,12 +311,6 @@ helm install lendkit infra/helm/lendkit \
 
 ---
 
-## Documentation
-
-Full technical documentation covering architecture, service internals, the scoring engine, underwriting logic, a worked end-to-end borrower example, API reference, and a developer guide is available in [`docs/LendKit_Technical_Documentation.docx`](docs/LendKit_Technical_Documentation.docx).
-
----
-
 ## Contributing
 
 We welcome contributions of all sizes. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, PR guidelines, and good first issues.

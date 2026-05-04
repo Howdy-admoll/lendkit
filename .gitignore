@@ -60,3 +60,7 @@ Thumbs.db
 *.log
 logs/
 tmp/
+
+# Generated documents — keep out of the repo
+docs/*.docx
+docs/*.pdf
