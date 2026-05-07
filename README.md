@@ -11,7 +11,7 @@
 [![Kubernetes](https://img.shields.io/badge/kubernetes-helm-326CE5.svg)](https://helm.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Production-grade microservices covering the full loan lifecycle — identity verification, credit decisioning, loan origination, and repayment tracking.
+Production-grade microservices covering the full loan lifecycle — identity verification, credit decisioning, loan origination, repayment tracking, disbursement, and notifications.
 
 [Quickstart](#quickstart) · [Architecture](#architecture) · [Services](#services) · [Roadmap](#roadmap) · [Contributing](#contributing)
 
@@ -39,8 +39,8 @@ LendKit is a collection of independently deployable microservices that cover the
 | **Credit Scoring** | `:8002` | ✅ Production-ready | ✓ 43 passing | 10-rule scoring engine, tier classification, PEP screening |
 | **Loan Origination** | `:8003` | ✅ Production-ready | ✓ 25 passing | Underwriting, DTI guard, 9-state loan lifecycle, offer management |
 | **Repayment Tracking** | `:8004` | ✅ Production-ready | ✓ 66 passing | Amortization schedule, payment allocation, delinquency & default detection |
-| **Disbursement** | `:8005` | 🔜 Next | — | Paystack/Flutterwave payout, disbursement state machine |
-| **Notifications** | `:8006` | 🔜 Next | — | SMS/email/push for loan events and payment reminders |
+| **Disbursement** | `:8005` | ✅ Production-ready | ✓ 62 passing | Paystack payout, idempotent state machine, HMAC-SHA512 webhooks |
+| **Notifications** | `:8006` | ✅ Production-ready | ✓ 80 passing | Termii SMS + SendGrid email, 6 event types, opt-out support |
 | **Collections** | `:8007` | 📋 Planned | — | Automated collections workflow, agent queue, escalation rules |
 
 ---
@@ -290,9 +290,9 @@ helm install lendkit infra/helm/lendkit \
 - [x] Repayment tracking — amortization schedule, payment allocation, delinquency & default detection (66 tests)
 - [x] CI pipeline — lint, unit tests per service, Docker build, Trivy security scan, GHCR publish
 
-### 🔜 Phase 2 — Money Movement & Communications
-- [ ] Disbursement service — Paystack/Flutterwave payout, idempotent disbursement state machine
-- [ ] Notification service — SMS, email & push (approval alerts, due date reminders, missed payment warnings)
+### ✅ Phase 2 — Money Movement & Communications (complete)
+- [x] Disbursement service — Paystack payout, idempotent state machine, HMAC-SHA512 webhooks, retry with backoff (62 tests)
+- [x] Notification service — Termii SMS + SendGrid email, 6 event types, opt-out preferences, idempotent delivery (80 tests)
 - [ ] Collections service — automated collections workflow, agent assignment queue, escalation rules
 
 ### 📋 Phase 3 — Platform & Operations
