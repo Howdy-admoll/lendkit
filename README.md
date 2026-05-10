@@ -41,7 +41,7 @@ LendKit is a collection of independently deployable microservices that cover the
 | **Repayment Tracking** | `:8004` | ✅ Production-ready | ✓ 66 passing | Amortization schedule, payment allocation, delinquency & default detection |
 | **Disbursement** | `:8005` | ✅ Production-ready | ✓ 62 passing | Paystack payout, idempotent state machine, HMAC-SHA512 webhooks |
 | **Notifications** | `:8006` | ✅ Production-ready | ✓ 80 passing | Termii SMS + SendGrid email, 6 event types, opt-out support |
-| **Collections** | `:8007` | 📋 Planned | — | Automated collections workflow, agent queue, escalation rules |
+| **Collections** | `:8007` | ✅ Production-ready | ✓ 77 passing | Escalation ladder, agent queue, promise-to-pay, legal referral, write-off |
 
 ---
 
@@ -293,7 +293,7 @@ helm install lendkit infra/helm/lendkit \
 ### ✅ Phase 2 — Money Movement & Communications (complete)
 - [x] Disbursement service — Paystack payout, idempotent state machine, HMAC-SHA512 webhooks, retry with backoff (62 tests)
 - [x] Notification service — Termii SMS + SendGrid email, 6 event types, opt-out preferences, idempotent delivery (80 tests)
-- [ ] Collections service — automated collections workflow, agent assignment queue, escalation rules
+- [x] Collections service — DPD escalation ladder, agent assignment queue, promise-to-pay tracking, legal referral, write-off (77 tests)
 
 ### 📋 Phase 3 — Platform & Operations
 - [ ] API Gateway — JWT auth, tenant routing, rate limiting, request logging
