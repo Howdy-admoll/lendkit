@@ -11,7 +11,7 @@
 [![Kubernetes](https://img.shields.io/badge/kubernetes-helm-326CE5.svg)](https://helm.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Production-grade microservices covering the full loan lifecycle — identity verification, credit decisioning, loan origination, repayment tracking, disbursement, and notifications.
+Production-grade microservices covering the full loan lifecycle — from identity verification and credit decisioning through disbursement, repayment, collections, and a unified API Gateway.
 
 [Quickstart](#quickstart) · [Architecture](#architecture) · [Services](#services) · [Roadmap](#roadmap) · [Contributing](#contributing)
 
@@ -35,6 +35,7 @@ LendKit is a collection of independently deployable microservices that cover the
 
 | Service | Port | Status | Tests | Description |
 |---|---|---|---|---|
+| **API Gateway** | `:8000` | ✅ Production-ready | ✓ 55 passing | JWT auth, rate limiting, reverse proxy to all services |
 | **KYC** | `:8001` | ✅ Production-ready | ✓ Full suite | Identity verification, BVN/NIN, document OCR, liveness |
 | **Credit Scoring** | `:8002` | ✅ Production-ready | ✓ 43 passing | 10-rule scoring engine, tier classification, PEP screening |
 | **Loan Origination** | `:8003` | ✅ Production-ready | ✓ 25 passing | Underwriting, DTI guard, 9-state loan lifecycle, offer management |
@@ -295,8 +296,9 @@ helm install lendkit infra/helm/lendkit \
 - [x] Notification service — Termii SMS + SendGrid email, 6 event types, opt-out preferences, idempotent delivery (80 tests)
 - [x] Collections service — DPD escalation ladder, agent assignment queue, promise-to-pay tracking, legal referral, write-off (77 tests)
 
-### 📋 Phase 3 — Platform & Operations
-- [ ] API Gateway — JWT auth, tenant routing, rate limiting, request logging
+### 🔜 Phase 3 — Platform & Operations
+- [x] API Gateway — JWT auth (HS256), per-IP + per-tenant rate limiting, reverse proxy, request tracing (55 tests)
+- [ ] Docker Compose — single `docker compose up` for the full stack (all 8 services + Postgres + Redis)
 - [ ] Admin dashboard — loan officer UI, manual override, borrower profiles (React)
 - [ ] Reporting & analytics — portfolio health, NPL ratios, disbursement volumes, cohort analysis
 - [ ] Tenant management — per-tenant APR, DPD thresholds, grace period, feature flags
