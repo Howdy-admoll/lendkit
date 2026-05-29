@@ -39,6 +39,9 @@ up-scoring: ## Start Credit Scoring service + infra
 up-gateway: ## Start gateway + infra only
 	docker compose up -d postgres redis gateway
 
+up-dashboard: ## Start dashboard + gateway + infra
+	docker compose up -d postgres redis gateway dashboard
+
 down: ## Stop and remove containers
 	docker compose down
 

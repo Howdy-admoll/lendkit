@@ -9,6 +9,7 @@ version: "3.9"
 #   docker compose up --build   # build and start everything
 #
 # Services:
+#   dashboard     Admin Dashboard — React UI             :3000
 #   gateway       API Gateway — single entry point       :8000
 #   kyc           KYC / Identity verification            :8001
 #   credit        Credit Scoring engine                  :8002
@@ -299,6 +300,27 @@ services:
     healthcheck:
       <<: *healthcheck
       test: ["CMD-SHELL", "curl -sf http://localhost:8007/health || exit 1"]
+
+  # ===========================================================================
+  # Admin Dashboard  (port 3000)
+  # ===========================================================================
+
+  dashboard:
+    <<: *service-defaults
+    build:
+      context: ./services/dashboard
+      target: production
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
 # =============================================================================
 # Volumes & Networks

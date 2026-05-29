@@ -43,6 +43,7 @@ LendKit is a collection of independently deployable microservices that cover the
 | **Disbursement** | `:8005` | ✅ Production-ready | ✓ 62 passing | Paystack payout, idempotent state machine, HMAC-SHA512 webhooks |
 | **Notifications** | `:8006` | ✅ Production-ready | ✓ 80 passing | Termii SMS + SendGrid email, 6 event types, opt-out support |
 | **Collections** | `:8007` | ✅ Production-ready | ✓ 77 passing | Escalation ladder, agent queue, promise-to-pay, legal referral, write-off |
+| **Dashboard** | `:3000` | ✅ Production-ready | — | React + Vite admin UI — portfolio overview, loan pipeline, collections queue, borrower profiles |
 
 ---
 
@@ -300,7 +301,7 @@ helm install lendkit infra/helm/lendkit \
 - [x] API Gateway — JWT auth (HS256), per-IP + per-tenant rate limiting, reverse proxy, request tracing (55 tests)
 - [x] Docker Compose — single `docker compose up --build` starts all 8 services + Postgres 16 + Redis 7
 - [x] Integration tests — full loan lifecycle test suite (KYC → score → originate → disburse → repay → collect)
-- [ ] Admin dashboard — loan officer UI, manual override, borrower profiles (React)
+- [x] Admin dashboard — React + Vite SPA (portfolio overview, loan pipeline, collections queue, borrower profiles) served via nginx on :3000
 - [ ] Reporting & analytics — portfolio health, NPL ratios, disbursement volumes, cohort analysis
 - [ ] Tenant management — per-tenant APR, DPD thresholds, grace period, feature flags
 - [ ] Webhook relay — signed outbound webhooks to tenant systems with retry backoff
