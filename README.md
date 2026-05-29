@@ -298,7 +298,8 @@ helm install lendkit infra/helm/lendkit \
 
 ### 🔜 Phase 3 — Platform & Operations
 - [x] API Gateway — JWT auth (HS256), per-IP + per-tenant rate limiting, reverse proxy, request tracing (55 tests)
-- [ ] Docker Compose — single `docker compose up` for the full stack (all 8 services + Postgres + Redis)
+- [x] Docker Compose — single `docker compose up --build` starts all 8 services + Postgres 16 + Redis 7
+- [x] Integration tests — full loan lifecycle test suite (KYC → score → originate → disburse → repay → collect)
 - [ ] Admin dashboard — loan officer UI, manual override, borrower profiles (React)
 - [ ] Reporting & analytics — portfolio health, NPL ratios, disbursement volumes, cohort analysis
 - [ ] Tenant management — per-tenant APR, DPD thresholds, grace period, feature flags

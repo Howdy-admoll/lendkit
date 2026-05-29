@@ -2,9 +2,10 @@
 # LendKit — Developer Makefile
 # =============================================================================
 .DEFAULT_GOAL := help
-.PHONY: help up down build logs lint test migrate seed k8s-apply k8s-delete
+.PHONY: help up down build logs lint test migrate migrate-all seed k8s-apply k8s-delete
 
-SERVICES ?= kyc credit loan repayment
+SERVICES     ?= kyc credit loan repayment disbursement notification collections
+DB_SERVICES  ?= kyc credit loan repayment disbursement notification collections
 
 # Colors
 BOLD  := \033[1m
@@ -30,7 +31,13 @@ up-infra: ## Start only infrastructure (postgres, redis)
 	docker compose up -d postgres redis
 
 up-kyc: ## Start KYC service + infra
-	docker compose up -d postgres redis kyc worker-kyc
+	docker compose up -d postgres redis kyc
+
+up-scoring: ## Start Credit Scoring service + infra
+	docker compose up -d postgres redis credit
+
+up-gateway: ## Start gateway + infra only
+	docker compose up -d postgres redis gateway
 
 down: ## Stop and remove containers
 	docker compose down
@@ -54,10 +61,12 @@ restart: ## Restart all services
 # Database
 # ---------------------------------------------------------------------------
 migrate: ## Run Alembic migrations for all services
-	@for svc in $(SERVICES); do \
+	@for svc in $(DB_SERVICES); do \
 		echo "$(GREEN)>>> Running migrations: $$svc$(RESET)"; \
 		docker compose exec $$svc alembic upgrade head; \
 	done
+
+migrate-all: migrate ## Alias for migrate (run all service migrations)
 
 migrate-kyc: ## Run KYC migrations only
 	docker compose exec kyc alembic upgrade head

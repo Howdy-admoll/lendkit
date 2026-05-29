@@ -1,21 +1,27 @@
 version: "3.9"
 
 # =============================================================================
-# LendKit — Local Development Stack
+# LendKit — Full Local Development Stack
 # =============================================================================
-# Usage:
-#   cp .env.example .env
-#   docker compose up --build
+#
+# Quick start:
+#   cp .env.example .env        # copy and edit secrets
+#   docker compose up --build   # build and start everything
 #
 # Services:
-#   - postgres      : Shared PostgreSQL instance (4 databases)
-#   - redis         : Cache + Celery broker + event streams
-#   - kyc           : KYC/BIN verification service  :8001
-#   - credit        : Credit scoring engine          :8002
-#   - loan          : Loan origination pipeline      :8003
-#   - repayment     : Repayment & default tracker    :8004
-#   - worker-kyc    : Celery worker for KYC tasks
-#   - flower        : Celery monitoring UI           :5555
+#   gateway       API Gateway — single entry point       :8000
+#   kyc           KYC / Identity verification            :8001
+#   credit        Credit Scoring engine                  :8002
+#   loan          Loan Origination pipeline              :8003
+#   repayment     Repayment & default tracking           :8004
+#   disbursement  Paystack payout orchestration          :8005
+#   notification  SMS / Email dispatch                   :8006
+#   collections   Collections workflow & agent queue     :8007
+#
+# Infrastructure:
+#   postgres      PostgreSQL 16 — 7 logical databases    :5432
+#   redis         Redis 7       — cache + streams        :6379
+#
 # =============================================================================
 
 x-service-defaults: &service-defaults
@@ -24,16 +30,24 @@ x-service-defaults: &service-defaults
   networks:
     - lendkit
 
-x-healthcheck-defaults: &healthcheck-defaults
+x-healthcheck: &healthcheck
   interval: 10s
   timeout: 5s
   retries: 5
   start_period: 20s
 
+# Shared environment variables injected into every app service
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-development}
+  REDIS_URL: redis://redis:6379/0
+  REDIS_STREAM_URL: redis://redis:6379/1
+
 services:
-  # ---------------------------------------------------------------------------
+
+  # ===========================================================================
   # Infrastructure
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+
   postgres:
     <<: *service-defaults
     image: postgres:16-alpine
@@ -43,153 +57,258 @@ services:
       POSTGRES_DB: kyc
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
-      <<: *healthcheck-defaults
+      <<: *healthcheck
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lendkit}"]
 
   redis:
     <<: *service-defaults
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
       - "6379:6379"
     healthcheck:
-      <<: *healthcheck-defaults
+      <<: *healthcheck
       test: ["CMD", "redis-cli", "ping"]
 
-  # ---------------------------------------------------------------------------
-  # KYC / BIN Verification Service
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # API Gateway  (port 8000)
+  # ===========================================================================
+
+  gateway:
+    <<: *service-defaults
+    build:
+      context: ./services/gateway
+      target: production
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    environment:
+      <<: *app-env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-long-random-string-in-production}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      RATE_LIMIT_PER_IP_PER_MINUTE: ${RATE_LIMIT_PER_IP_PER_MINUTE:-120}
+      RATE_LIMIT_PER_TENANT_PER_MINUTE: ${RATE_LIMIT_PER_TENANT_PER_MINUTE:-600}
+      KYC_URL: http://kyc:8001
+      CREDIT_SCORING_URL: http://credit:8002
+      LOAN_ORIGINATION_URL: http://loan:8003
+      REPAYMENT_URL: http://repayment:8004
+      DISBURSEMENT_URL: http://disbursement:8005
+      NOTIFICATION_URL: http://notification:8006
+      COLLECTIONS_URL: http://collections:8007
+    depends_on:
+      redis:
+        condition: service_healthy
+      kyc:
+        condition: service_healthy
+      credit:
+        condition: service_healthy
+      loan:
+        condition: service_healthy
+      repayment:
+        condition: service_healthy
+      disbursement:
+        condition: service_healthy
+      notification:
+        condition: service_healthy
+      collections:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+
+  # ===========================================================================
+  # KYC Service  (port 8001)
+  # ===========================================================================
+
   kyc:
     <<: *service-defaults
     build:
       context: ./services/kyc
-      dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ./services/kyc:/app
-      - ./shared:/app/shared
+      target: production
     ports:
-      - "${KYC_SERVICE_PORT:-8001}:8001"
+      - "${KYC_PORT:-8001}:8001"
     environment:
-      SERVICE_PORT: 8001
-      DB_URL: ${KYC_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/kyc}
-      REDIS_URL: ${KYC_REDIS_URL:-redis://redis:6379/0}
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/kyc
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-mock}
+      DOCUMENT_PROVIDER: ${DOCUMENT_PROVIDER:-mock}
+      EVENT_BACKEND: ${EVENT_BACKEND:-redis}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      <<: *healthcheck-defaults
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
 
-  worker-kyc:
+  # ===========================================================================
+  # Credit Scoring Service  (port 8002)
+  # ===========================================================================
+
+  credit:
     <<: *service-defaults
     build:
-      context: ./services/kyc
-      dockerfile: Dockerfile
-      target: development
-    command: celery -A app.workers.kyc_tasks worker --loglevel=info --concurrency=4 -Q kyc
-    volumes:
-      - ./services/kyc:/app
-      - ./shared:/app/shared
+      context: ./services/credit-scoring
+      target: production
+    ports:
+      - "${CREDIT_PORT:-8002}:8002"
     environment:
-      DB_URL: ${KYC_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/kyc}
-      REDIS_URL: ${KYC_REDIS_URL:-redis://redis:6379/0}
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/credit
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8002/health || exit 1"]
+
+  # ===========================================================================
+  # Loan Origination Service  (port 8003)
+  # ===========================================================================
+
+  loan:
+    <<: *service-defaults
+    build:
+      context: ./services/loan-origination
+      target: production
+    ports:
+      - "${LOAN_PORT:-8003}:8003"
+    environment:
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/loans
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  # ---------------------------------------------------------------------------
-  # Credit Scoring Service
-  # ---------------------------------------------------------------------------
-  credit:
-    <<: *service-defaults
-    build:
-      context: ./services/credit-scoring
-      dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ./services/credit-scoring:/app
-      - ./shared:/app/shared
-    ports:
-      - "${CREDIT_SCORING_SERVICE_PORT:-8002}:8002"
-    environment:
-      SERVICE_PORT: 8002
-      DB_URL: ${CREDIT_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/credit}
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # ---------------------------------------------------------------------------
-  # Loan Origination Service
-  # ---------------------------------------------------------------------------
-  loan:
-    <<: *service-defaults
-    build:
-      context: ./services/loan-origination
-      dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ./services/loan-origination:/app
-      - ./shared:/app/shared
-    ports:
-      - "${LOAN_ORIGINATION_SERVICE_PORT:-8003}:8003"
-    environment:
-      SERVICE_PORT: 8003
-      DB_URL: ${LOAN_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/loans}
-    depends_on:
-      postgres:
-        condition: service_healthy
       kyc:
         condition: service_healthy
       credit:
         condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8003/health || exit 1"]
 
-  # ---------------------------------------------------------------------------
-  # Repayment & Default Detection Service
-  # ---------------------------------------------------------------------------
+  # ===========================================================================
+  # Repayment Tracking Service  (port 8004)
+  # ===========================================================================
+
   repayment:
     <<: *service-defaults
     build:
       context: ./services/repayment
-      dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ./services/repayment:/app
-      - ./shared:/app/shared
+      target: production
     ports:
-      - "${REPAYMENT_SERVICE_PORT:-8004}:8004"
+      - "${REPAYMENT_PORT:-8004}:8004"
     environment:
-      SERVICE_PORT: 8004
-      DB_URL: ${REPAYMENT_DB_URL:-postgresql+asyncpg://lendkit:lendkit@postgres:5432/repayment}
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/repayment
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8004/health || exit 1"]
 
-  # ---------------------------------------------------------------------------
-  # Monitoring
-  # ---------------------------------------------------------------------------
-  flower:
+  # ===========================================================================
+  # Disbursement Service  (port 8005)
+  # ===========================================================================
+
+  disbursement:
     <<: *service-defaults
-    image: mher/flower:2.0
-    command: celery flower --broker=redis://redis:6379/0 --port=5555
+    build:
+      context: ./services/disbursement
+      target: production
     ports:
-      - "5555:5555"
+      - "${DISBURSEMENT_PORT:-8005}:8005"
+    environment:
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/disbursement
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      PAYSTACK_SECRET_KEY: ${PAYSTACK_SECRET_KEY:-sk_test_placeholder}
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8005/health || exit 1"]
+
+  # ===========================================================================
+  # Notification Service  (port 8006)
+  # ===========================================================================
+
+  notification:
+    <<: *service-defaults
+    build:
+      context: ./services/notification
+      target: production
+    ports:
+      - "${NOTIFICATION_PORT:-8006}:8006"
+    environment:
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/notification
+      TERMII_API_KEY: ${TERMII_API_KEY:-termii-test-key}
+      TERMII_SENDER_ID: ${TERMII_SENDER_ID:-LendKit}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-SG.test-key}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-noreply@lendkit.io}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@lendkit.io}
+      SUPPORT_PHONE: ${SUPPORT_PHONE:-+2348001234567}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8006/health || exit 1"]
+
+  # ===========================================================================
+  # Collections Service  (port 8007)
+  # ===========================================================================
+
+  collections:
+    <<: *service-defaults
+    build:
+      context: ./services/collections
+      target: production
+    ports:
+      - "${COLLECTIONS_PORT:-8007}:8007"
+    environment:
+      <<: *app-env
+      DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/collections
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "curl -sf http://localhost:8007/health || exit 1"]
+
+# =============================================================================
+# Volumes & Networks
+# =============================================================================
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
 
 networks:
   lendkit:
