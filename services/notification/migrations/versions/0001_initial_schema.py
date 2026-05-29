@@ -18,7 +18,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE IF NOT EXISTS channel_type_enum AS ENUM ('sms', 'email', 'push')")
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE channel_type_enum AS ENUM ('sms', 'email', 'push');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
 
     op.create_table(
         "notification_logs",

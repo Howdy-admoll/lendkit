@@ -18,10 +18,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "CREATE TYPE IF NOT EXISTS collection_state_enum AS ENUM "
-        "('open','agent_assigned','promise_to_pay','broken_promise','legal','recovered','written_off')"
-    )
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE collection_state_enum AS ENUM
+                ('open','agent_assigned','promise_to_pay','broken_promise','legal','recovered','written_off');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$
+    """)
 
     op.create_table(
         "collection_cases",

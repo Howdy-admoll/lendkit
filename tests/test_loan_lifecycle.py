@@ -63,14 +63,14 @@ class TestStep1KYC:
             "phone": "+2348012345678",
             "email": f"amara-{uuid.uuid4().hex[:6]}@example.com",
         }
-        resp = client.post("/kyc/v1/applications", json=payload)
+        resp = client.post("/kyc/api/v1/kyc/", json=payload)
 
         # 201 Created or 200 OK depending on service version
         assert resp.status_code in {200, 201, 422}, f"KYC submit failed: {resp.text}"
 
         if resp.status_code in {200, 201}:
             data = resp.json()
-            ctx.borrower_id = data.get("borrower_id") or data.get("id", str(uuid.uuid4()))
+            ctx.borrower_id = data.get("borrower_id") or data.get("customer_id") or data.get("id", str(uuid.uuid4()))
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +95,12 @@ class TestStep2CreditScoring:
             "employer_name": "Flutterwave",
             "years_employed": 3,
         }
-        resp = client.post("/scoring/v1/score", json=payload)
+        resp = client.post("/scoring/api/v1/scores", json=payload)
         assert resp.status_code in {200, 201, 422}, f"Scoring failed: {resp.text}"
 
         if resp.status_code in {200, 201}:
             data = resp.json()
-            ctx.score = data.get("score", 0)
+            ctx.score = data.get("score", data.get("total_score", 0))
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +122,7 @@ class TestStep3LoanOrigination:
             "monthly_income_kobo": 30_000_000,
             "monthly_obligations_kobo": 5_000_000,
         }
-        resp = client.post("/loans/v1/applications", json=payload)
+        resp = client.post("/loans/api/v1/loans", json=payload)
         assert resp.status_code in {200, 201, 422}, f"Loan apply failed: {resp.text}"
 
         if resp.status_code in {200, 201}:
@@ -134,12 +134,12 @@ class TestStep3LoanOrigination:
         if not ctx.loan_id:
             pytest.skip("No loan_id from previous step")
 
-        resp = client.get(f"/loans/v1/applications/{ctx.loan_id}")
+        resp = client.get(f"/loans/api/v1/loans/{ctx.loan_id}")
         assert resp.status_code in {200, 404}
 
         if resp.status_code == 200:
             data = resp.json()
-            ctx.offer_id = data.get("offer_id", "")
+            ctx.offer_id = data.get("offer_id") or ctx.loan_id
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ class TestStep4AcceptOffer:
         if not ctx.loan_id or not ctx.offer_id:
             pytest.skip("No offer to accept — skipping")
 
-        resp = client.post(f"/loans/v1/offers/{ctx.offer_id}/accept")
+        resp = client.post(f"/loans/api/v1/loans/{ctx.loan_id}/accept-offer")
         assert resp.status_code in {200, 201, 404, 422}, f"Accept failed: {resp.text}"
 
     def test_disbursement_health(self, client: httpx.Client):
@@ -185,7 +185,7 @@ class TestStep5Repayment:
             "tenure_months": 6,
             "first_due_date": "2025-06-01",
         }
-        resp = client.post("/repayment/v1/loans", json=payload)
+        resp = client.post("/repayment/api/v1/loans", json=payload)
         assert resp.status_code in {200, 201, 409, 422}, f"Register failed: {resp.text}"
 
     def test_get_repayment_schedule(self, client: httpx.Client, ctx: LoanContext):
@@ -193,7 +193,7 @@ class TestStep5Repayment:
         if not ctx.loan_id:
             pytest.skip("No loan_id")
 
-        resp = client.get(f"/repayment/v1/loans/{ctx.loan_id}/schedule")
+        resp = client.get(f"/repayment/api/v1/repayments/{ctx.loan_id}/schedule")
         assert resp.status_code in {200, 404}
 
         if resp.status_code == 200:
@@ -219,7 +219,7 @@ class TestStep6NotificationsAndCollections:
         if not ctx.loan_id:
             pytest.skip("No loan_id")
 
-        resp = client.get(f"/collections/v1/cases/{ctx.loan_id}")
+        resp = client.get(f"/collections/api/v1/cases/{ctx.loan_id}")
         # 404 = no case (correct), 200 = case exists (should not happen for healthy loan)
         assert resp.status_code == 404, (
             f"Unexpected collection case for healthy loan {ctx.loan_id}"
