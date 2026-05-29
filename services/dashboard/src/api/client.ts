@@ -3,7 +3,7 @@
 // All requests go through the API Gateway (/api prefix → proxied to :8000)
 // ---------------------------------------------------------------------------
 
-const BASE_URL = import.meta.env.VITE_GATEWAY_URL ?? "/api";
+const BASE_URL = "/api";
 
 let _token: string | null = sessionStorage.getItem("lendkit_token");
 
