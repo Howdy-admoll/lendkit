@@ -136,7 +136,7 @@ services:
     environment:
       <<: *app-env
       DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/kyc
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-long-random-string-in-production}
       IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-mock}
       DOCUMENT_PROVIDER: ${DOCUMENT_PROVIDER:-mock}
       EVENT_BACKEND: ${EVENT_BACKEND:-redis}
@@ -163,7 +163,7 @@ services:
     environment:
       <<: *app-env
       DB_URL: postgresql+asyncpg://${POSTGRES_USER:-lendkit}:${POSTGRES_PASSWORD:-lendkit}@postgres:5432/credit
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-long-random-string-in-production}
     depends_on:
       postgres:
         condition: service_healthy
