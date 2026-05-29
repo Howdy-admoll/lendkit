@@ -164,7 +164,12 @@ async def run_consumer() -> None:
     settings = get_settings()
     channels = _build_channels(settings)
 
-    redis_client = aioredis.from_url(settings.redis_stream_url, decode_responses=True)
+    redis_client = aioredis.from_url(
+        settings.redis_stream_url,
+        decode_responses=True,
+        socket_timeout=30,          # must exceed consumer_block_ms (5s)
+        socket_connect_timeout=10,
+    )
 
     # Create consumer groups (BUSYGROUP = already exists, safe to ignore)
     for stream in _STREAMS:
