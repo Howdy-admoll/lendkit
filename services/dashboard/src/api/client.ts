@@ -162,9 +162,10 @@ export interface KYCApplication {
 
 export const loansApi = {
   list: () =>
-    api.get<{ items: Loan[]; total: number }>("/loans/api/v1/loans").then(r =>
-      r.items.map(l => ({
+    api.get<{ items: any[]; total: number }>("/loans/api/v1/loans").then(r =>
+      r.items.map((l: any) => ({
         ...l,
+        loan_id: l.loan_id ?? l.id,
         status: l.state,
         approved_amount_kobo: l.offer?.approved_amount_kobo ?? l.requested_amount_kobo,
       }))

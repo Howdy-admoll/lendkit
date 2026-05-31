@@ -79,23 +79,28 @@ export default function LoansPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((loan, i) => (
-                <tr key={loan.loan_id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{loan.loan_id.slice(0, 8)}…</td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{loan.customer_id.slice(0, 8)}…</td>
+              {filtered.map((loan, i) => {
+                const loanId = (loan.loan_id ?? (loan as any).id ?? "");
+                const customerId = loan.customer_id ?? "";
+                const state = loan.state ?? "";
+                return (
+                <tr key={loanId || i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{loanId.slice(0, 8)}…</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{customerId.slice(0, 8)}…</td>
                   <td className="px-4 py-3">
-                    <Badge label={loan.state} variant={loanStatusVariant(loan.state.toUpperCase())} />
+                    <Badge label={state} variant={loanStatusVariant(state.toUpperCase())} />
                   </td>
                   <td className="px-4 py-3 text-right font-medium">
-                    {fmt(loan.approved_amount_kobo ?? loan.requested_amount_kobo)}
+                    {fmt(loan.approved_amount_kobo ?? loan.requested_amount_kobo ?? 0)}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600">{loan.tenure_months}mo</td>
-                  <td className="px-4 py-3 text-gray-600 capitalize">{loan.purpose.replace(/_/g, " ")}</td>
+                  <td className="px-4 py-3 text-gray-600 capitalize">{(loan.purpose ?? "").replace(/_/g, " ")}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs">
-                    {format(new Date(loan.created_at), "dd MMM yyyy")}
+                    {loan.created_at ? format(new Date(loan.created_at), "dd MMM yyyy") : "—"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
