@@ -21,12 +21,13 @@ export default function LoansPage() {
   const loans: Loan[] = data ?? [];
 
   const filtered = loans.filter(l => {
-    const matchStatus = status === "ALL" || l.state === status;
+    const matchStatus = status === "ALL" || (l.state ?? "") === status;
     const q = search.toLowerCase();
+    const id = (l.loan_id ?? (l as any).id ?? "").toLowerCase();
     const matchSearch = !q ||
-      l.loan_id.toLowerCase().includes(q) ||
-      l.customer_id.toLowerCase().includes(q) ||
-      l.purpose.toLowerCase().includes(q);
+      id.includes(q) ||
+      (l.customer_id ?? "").toLowerCase().includes(q) ||
+      (l.purpose ?? "").toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
 
