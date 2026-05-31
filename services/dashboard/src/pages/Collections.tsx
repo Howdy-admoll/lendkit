@@ -18,7 +18,7 @@ export default function CollectionsPage() {
     queryFn: collectionsApi.listCases,
   });
 
-  const cases: CollectionCase[] = (data ?? []).sort((a, b) => b.dpd - a.dpd);
+  const cases: CollectionCase[] = (data ?? []).sort((a, b) => b.days_past_due - a.days_past_due);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -54,22 +54,22 @@ export default function CollectionsPage() {
             </thead>
             <tbody>
               {cases.map((c, i) => (
-                <tr key={c.case_id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{c.case_id.slice(0, 8)}…</td>
+                <tr key={c.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{c.id.slice(0, 8)}…</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{c.loan_id.slice(0, 8)}…</td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-600">{c.borrower_id.slice(0, 8)}…</td>
-                  <td className="px-4 py-3 text-right font-semibold">{c.dpd}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{c.days_past_due}</td>
                   <td className="px-4 py-3">
-                    <Badge label={dpdLabel(c.dpd)} variant={dpdStatusVariant(dpdLabel(c.dpd))} />
+                    <Badge label={dpdLabel(c.days_past_due)} variant={dpdStatusVariant(dpdLabel(c.days_past_due))} />
                   </td>
                   <td className="px-4 py-3">
                     <Badge label={c.state} variant={collectionStateVariant(c.state)} />
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">
-                    {c.promise_date ? format(new Date(c.promise_date), "dd MMM yyyy") : "—"}
+                    {c.promise_to_pay_date ? format(new Date(c.promise_to_pay_date), "dd MMM yyyy") : "—"}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">
-                    {format(new Date(c.created_at), "dd MMM yyyy")}
+                    {format(new Date(c.opened_at), "dd MMM yyyy")}
                   </td>
                 </tr>
               ))}

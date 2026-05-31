@@ -50,15 +50,15 @@ export default function OverviewPage() {
 
   // Stat computations
   const totalDisbursed = loanList
-    .filter(l => ["ACTIVE", "DISBURSING", "OFFER_ACCEPTED"].includes(l.status))
+    .filter(l => ["active", "disbursing", "offer_accepted", "ACTIVE", "DISBURSING", "OFFER_ACCEPTED"].includes(l.status))
     .reduce((s, l) => s + (l.approved_amount_kobo ?? l.requested_amount_kobo), 0);
 
-  const activeLoans = loanList.filter(l => l.status === "ACTIVE").length;
-  const nplLoans    = accountList.filter(l => l.dpd >= 90).length;
+  const activeLoans = loanList.filter(l => ["active", "ACTIVE"].includes(l.status)).length;
+  const nplLoans    = accountList.filter(l => l.days_past_due >= 90).length;
   const nplRate     = accountList.length ? ((nplLoans / accountList.length) * 100).toFixed(1) : "0.0";
 
   // Pie: loans by status
-  const byStatus = groupBy(loanList, l => l.status);
+  const byStatus = groupBy(loanList, l => (l.status ?? "UNKNOWN").toUpperCase());
   const statusPie = Object.entries(byStatus).map(([name, items]) => ({
     name,
     value: items.length,
@@ -66,7 +66,7 @@ export default function OverviewPage() {
   }));
 
   // Bar: DPD distribution
-  const byDPD = groupBy(accountList, a => a.dpd_status);
+  const byDPD = groupBy(accountList, a => (a.status ?? "CURRENT").toUpperCase());
   const dpdBar = ["CURRENT", "AT_RISK", "DELINQUENT", "DEFAULT", "WRITTEN_OFF"].map(s => ({
     status: s,
     count: byDPD[s]?.length ?? 0,

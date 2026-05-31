@@ -18,11 +18,35 @@ from app.schemas.repayment import (
     RepaymentWebhookPayload,
     WebhookAckOut,
 )
+from sqlalchemy import select
+from app.db.models import LoanAccount
 from app.services import repayment_service as svc
 
 router = APIRouter(prefix="/api/v1", tags=["Repayments"])
 
 DB = Annotated[AsyncSession, Depends(get_db)]
+
+
+# ---------------------------------------------------------------------------
+# List all loan accounts
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/accounts",
+    response_model=list[LoanRepaymentStatusOut],
+    summary="List all loan accounts",
+)
+async def list_accounts(
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: DB = ...,
+) -> list[LoanRepaymentStatusOut]:
+    result = await db.execute(
+        select(LoanAccount).order_by(LoanAccount.created_at.desc()).limit(limit).offset(offset)
+    )
+    accounts = result.scalars().all()
+    return [LoanRepaymentStatusOut.model_validate(a) for a in accounts]
 
 
 # ---------------------------------------------------------------------------

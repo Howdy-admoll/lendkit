@@ -228,6 +228,21 @@ async def cancel_loan(db: AsyncSession, loan_id: str) -> LoanApplicationOut | No
     return _loan_out(loan)
 
 
+async def list_all_loans(
+    db: AsyncSession,
+    limit: int = 100,
+    offset: int = 0,
+) -> LoanListOut:
+    base_q = select(LoanApplication).options(selectinload(LoanApplication.offer))
+    count_result = await db.execute(select(func.count()).select_from(base_q.subquery()))
+    total = count_result.scalar_one()
+    result = await db.execute(
+        base_q.order_by(LoanApplication.created_at.desc()).limit(limit).offset(offset)
+    )
+    loans = result.scalars().all()
+    return LoanListOut(items=[LoanApplicationOut.model_validate(l) for l in loans], total=total)
+
+
 async def list_customer_loans(
     db: AsyncSession,
     customer_id: str,

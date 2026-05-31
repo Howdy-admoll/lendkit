@@ -42,6 +42,19 @@ async def apply_for_loan(payload: LoanApplicationRequest, db: DbDep) -> LoanAppl
 
 
 @router.get(
+    "",
+    response_model=LoanListOut,
+    summary="List all loan applications",
+)
+async def list_loans(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: DbDep = ...,
+) -> LoanListOut:
+    return await loan_service.list_all_loans(db, limit, offset)
+
+
+@router.get(
     "/{loan_id}",
     response_model=LoanApplicationOut,
     summary="Get loan application",

@@ -132,13 +132,11 @@ class LoanRepaymentStatusOut(BaseModel):
     outstanding_principal_kobo: int
     accrued_interest_kobo: int
     accrued_penalties_kobo: int
-    total_outstanding_kobo: int
 
     annual_percentage_rate: float
     tenure_months: int
     monthly_installment_kobo: int
     installments_paid: int
-    installments_remaining: int
 
     status: RepaymentStatus
     days_past_due: int
@@ -149,6 +147,16 @@ class LoanRepaymentStatusOut(BaseModel):
 
     start_date: date
     settled_at: datetime | None
+
+    @property
+    def total_outstanding_kobo(self) -> int:
+        return self.outstanding_principal_kobo + self.accrued_interest_kobo + self.accrued_penalties_kobo
+
+    @property
+    def installments_remaining(self) -> int:
+        return max(0, self.tenure_months - self.installments_paid)
+
+    model_config = {"from_attributes": True}
 
 
 # ---------------------------------------------------------------------------

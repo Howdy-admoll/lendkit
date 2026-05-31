@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -51,29 +51,40 @@ class OfferAcceptRequest(BaseModel):
 
 
 class LoanOfferOut(BaseModel):
-    offer_id: str
+    offer_id: str = Field(alias="id")
     approved_amount_kobo: int
-    approved_amount_ngn: float
     tenure_months: int
     annual_percentage_rate: float
     monthly_repayment_kobo: int
-    monthly_repayment_ngn: float
     total_repayable_kobo: int
-    total_repayable_ngn: float
     disbursement_method: str
     is_accepted: bool
     expires_at: datetime
 
-    model_config = {"from_attributes": True}
+    @computed_field  # type: ignore[misc]
+    @property
+    def approved_amount_ngn(self) -> float:
+        return self.approved_amount_kobo / 100
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def monthly_repayment_ngn(self) -> float:
+        return self.monthly_repayment_kobo / 100
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def total_repayable_ngn(self) -> float:
+        return self.total_repayable_kobo / 100
+
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class LoanApplicationOut(BaseModel):
-    loan_id: str
+    loan_id: str = Field(alias="id")
     customer_id: str
     tenant_id: str
     state: str
     requested_amount_kobo: int
-    requested_amount_ngn: float
     tenure_months: int
     purpose: str
     credit_score: int | None
@@ -83,7 +94,12 @@ class LoanApplicationOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    @computed_field  # type: ignore[misc]
+    @property
+    def requested_amount_ngn(self) -> float:
+        return self.requested_amount_kobo / 100
+
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class LoanListOut(BaseModel):

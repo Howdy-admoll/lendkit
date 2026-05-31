@@ -94,28 +94,32 @@ export type DPDStatus = "CURRENT" | "AT_RISK" | "DELINQUENT" | "DEFAULT" | "WRIT
 
 export interface Loan {
   loan_id: string;
-  borrower_id: string;
-  status: LoanStatus;
+  customer_id: string;
+  state: string;         // lowercase from API: "active", "approved", etc.
+  status: string;        // alias — same as state, populated below
   requested_amount_kobo: number;
   approved_amount_kobo?: number;
   tenure_months: number;
-  annual_rate?: number;
   purpose: string;
+  credit_score?: number;
+  offer?: { approved_amount_kobo: number; annual_percentage_rate: number } | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface LoanAccount {
   loan_id: string;
-  borrower_id: string;
-  principal_kobo: number;
-  outstanding_kobo: number;
-  dpd: number;
-  dpd_status: DPDStatus;
-  annual_rate: number;
+  customer_id: string;
+  original_principal_kobo: number;
+  outstanding_principal_kobo: number;
+  days_past_due: number;
+  status: DPDStatus;
+  annual_percentage_rate: number;
   tenure_months: number;
-  first_due_date: string;
-  created_at: string;
+  monthly_installment_kobo: number;
+  installments_paid: number;
+  next_due_date: string | null;
+  start_date: string;
 }
 
 export interface ScheduleItem {
@@ -128,14 +132,15 @@ export interface ScheduleItem {
 }
 
 export interface CollectionCase {
-  case_id: string;
+  id: string;
   loan_id: string;
   borrower_id: string;
-  dpd: number;
+  days_past_due: number;
   state: string;
-  agent_id?: string;
-  promise_date?: string;
-  created_at: string;
+  assigned_agent_id?: string;
+  promise_to_pay_date?: string;
+  outstanding_balance_kobo: number;
+  opened_at: string;
   updated_at: string;
 }
 
@@ -156,22 +161,29 @@ export interface KYCApplication {
 // ---------------------------------------------------------------------------
 
 export const loansApi = {
-  list: () => api.get<Loan[]>("/loans/v1/applications"),
-  get: (id: string) => api.get<Loan>(`/loans/v1/applications/${id}`),
+  list: () =>
+    api.get<{ items: Loan[]; total: number }>("/loans/api/v1/loans").then(r =>
+      r.items.map(l => ({
+        ...l,
+        status: l.state,
+        approved_amount_kobo: l.offer?.approved_amount_kobo ?? l.requested_amount_kobo,
+      }))
+    ),
+  get: (id: string) => api.get<Loan>(`/loans/api/v1/loans/${id}`),
 };
 
 export const repaymentApi = {
-  getAccount: (loanId: string) => api.get<LoanAccount>(`/repayment/v1/loans/${loanId}`),
-  getSchedule: (loanId: string) => api.get<ScheduleItem[]>(`/repayment/v1/loans/${loanId}/schedule`),
-  listAccounts: () => api.get<LoanAccount[]>("/repayment/v1/loans"),
+  getAccount: (loanId: string) => api.get<LoanAccount>(`/repayment/api/v1/repayments/${loanId}`),
+  getSchedule: (loanId: string) => api.get<ScheduleItem[]>(`/repayment/api/v1/repayments/${loanId}/schedule`),
+  listAccounts: () => api.get<LoanAccount[]>("/repayment/api/v1/accounts"),
 };
 
 export const collectionsApi = {
-  listCases: () => api.get<CollectionCase[]>("/collections/v1/cases"),
-  getCase: (loanId: string) => api.get<CollectionCase>(`/collections/v1/cases/${loanId}`),
+  listCases: () => api.get<CollectionCase[]>("/collections/api/v1/cases"),
+  getCase: (loanId: string) => api.get<CollectionCase>(`/collections/api/v1/cases/${loanId}`),
 };
 
 export const kycApi = {
-  list: () => api.get<KYCApplication[]>("/kyc/v1/applications"),
-  get: (id: string) => api.get<KYCApplication>(`/kyc/v1/applications/${id}`),
+  list: () => api.get<KYCApplication[]>("/kyc/api/v1/kyc/"),
+  get: (id: string) => api.get<KYCApplication>(`/kyc/api/v1/kyc/${id}`),
 };
