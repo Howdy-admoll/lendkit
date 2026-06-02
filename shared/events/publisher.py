@@ -124,7 +124,7 @@ class DefaultDetectedEvent(LendKitEvent):
 
 
 # ---------------------------------------------------------------------------
-# Publisher interface
+# Publisher interface here so we can add more backends in the future (e.g., RabbitMQ, AWS SNS)
 # ---------------------------------------------------------------------------
 
 class BasePublisher(ABC):
@@ -138,7 +138,7 @@ class BasePublisher(ABC):
 
 
 # ---------------------------------------------------------------------------
-# Redis Streams Publisher
+# Redis Streams Publisher here as default for simplicity and low overhead. Kafka is optional for high-throughput use cases.
 # ---------------------------------------------------------------------------
 
 class RedisStreamPublisher(BasePublisher):
